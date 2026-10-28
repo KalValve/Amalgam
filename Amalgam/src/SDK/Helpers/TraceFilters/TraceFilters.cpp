@@ -131,3 +131,34 @@ TraceType_t CTraceFilterWorldAndPropsOnly::GetTraceType() const
 {
 	return TRACE_EVERYTHING_FILTER_PROPS;
 }
+
+bool CTraceFilterNavigation::ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask)
+{
+	if (!pHandleEntity)
+		return false;
+	auto pEntity = reinterpret_cast<CBaseEntity*>(pHandleEntity);
+	if (pEntity->entindex() == 0)
+		return true;
+	const auto nClassID = pEntity->GetClassID();
+	if (nClassID == ETFClassID::CBaseEntity)
+		return true;
+	if (m_iTeam == -1)
+		m_iTeam = m_pSkip ? m_pSkip->m_iTeamNum() : TEAM_UNASSIGNED;
+	if (nClassID == ETFClassID::CDynamicProp || nClassID == ETFClassID::CPhysicsProp || nClassID == ETFClassID::CPhysicsPropMultiplayer)
+		return false;
+	if (nClassID == ETFClassID::CTFPlayer)
+		return m_iPlayer == PLAYER_ALL || (m_iPlayer != PLAYER_NONE && pEntity->m_iTeamNum() != m_iTeam);
+	if (nClassID == ETFClassID::CBaseObject || nClassID == ETFClassID::CObjectSentrygun || nClassID == ETFClassID::CObjectDispenser)
+	{
+		if (m_iObject == OBJECT_ALL)
+			return true;
+		if (m_iObject == OBJECT_NONE)
+			return false;
+		return pEntity->m_iTeamNum() != m_iTeam || ((nContentsMask & CONTENTS_PLAYERCLIP) && m_pSkip && pEntity->As<CBaseObject>()->m_hBuilder().GetEntryIndex() == m_pSkip->entindex());
+	}
+	if (nClassID == ETFClassID::CFuncRespawnRoomVisualizer)
+		return (nContentsMask & CONTENTS_PLAYERCLIP) && m_iTeam != TEAM_UNASSIGNED && pEntity->ShouldCollide(8, m_iTeam == TF_TEAM_RED ? 0x1000 : 0x800);
+	return false;
+}
+
+TraceType_t CTraceFilterNavigation::GetTraceType() const { return TRACE_EVERYTHING; }

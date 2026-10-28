@@ -1083,6 +1083,25 @@ void CVisuals::CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 
 void CVisuals::LocalAnimations(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, bool bSendPacket)
 {
+	if (Vars::AntiAim::TauntSpin.Value && pLocal->IsTaunting())
+	{
+		if (Vars::AntiAim::TauntSpin.Value && pLocal->m_bAllowMoveDuringTaunt())
+			pLocal->m_flTauntYaw() = pCmd->viewangles.y;
+		m_vAngles.clear();
+		if (pWeapon)
+			pWeapon->UpdateAllViewmodelAddons();
+		return;
+	}
+	if (G::AntiAim && (Vars::AntiAim::YawReal.Value == Vars::AntiAim::YawEnum::Spin
+		|| Vars::AntiAim::YawFake.Value == Vars::AntiAim::YawEnum::Spin))
+	{
+		m_vAngles.clear();
+		if (pWeapon)
+			pWeapon->UpdateAllViewmodelAddons();
+		F::FakeAngle.Run(pLocal);
+		return;
+	}
+
 	m_vAngles.push_back(pCmd->viewangles);
 	if (pWeapon)
 		pWeapon->UpdateAllViewmodelAddons();

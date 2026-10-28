@@ -15,6 +15,7 @@
 #include "Interfaces/CTFGCClientSystem.h"
 #include "Interfaces/CThirdPersonManager.h"
 #include "Interfaces/CTFPartyClient.h"
+#include "Interfaces/CTFInventoryManager.h"
 #include "Interfaces/IClientEntityList.h"
 #include "Interfaces/ICVar.h"
 #include "Interfaces/IEngineTrace.h"

@@ -32,7 +32,9 @@ bool CAntiAim::YawOn()
 
 bool CAntiAim::ShouldRun(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
-	if (!pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->IsTaunting() || pLocal->m_MoveType() != MOVETYPE_WALK || pLocal->InCond(TF_COND_HALLOWEEN_KART)
+	const bool bTauntSpinActive = Vars::AntiAim::TauntSpin.Value && pLocal->IsTaunting();
+	if (!pLocal->IsAlive() || pLocal->IsAGhost() || (pLocal->IsTaunting() && !bTauntSpinActive)
+		|| pLocal->m_MoveType() != MOVETYPE_WALK && !bTauntSpinActive || pLocal->InCond(TF_COND_HALLOWEEN_KART)
 		|| G::Attacking == 1 || F::AutoRocketJump.IsRunning() || F::Ticks.m_bDoubletap // this m_bDoubletap check can probably be removed if we fix tickbase correctly
 		|| pWeapon && pWeapon->m_iItemDefinitionIndex() == Soldier_m_TheBeggarsBazooka && pCmd->buttons & IN_ATTACK && !(G::LastUserCmd->buttons & IN_ATTACK))
 		return false;
@@ -189,7 +191,8 @@ float CAntiAim::GetPitch(float flCurPitch)
 
 void CAntiAim::MinWalk(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
-	if (!Vars::AntiAim::MinWalk.Value || !YawOn() || !pLocal->m_hGroundEntity() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
+	if (!Vars::AntiAim::MinWalk.Value || !YawOn() || !pLocal->m_hGroundEntity()
+		|| pLocal->IsTaunting() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
 		return;
 
 	if (!pCmd->forwardmove && !pCmd->sidemove && pLocal->m_vecVelocity().Length2D() < 2.f)
@@ -198,11 +201,11 @@ void CAntiAim::MinWalk(CTFPlayer* pLocal, CUserCmd* pCmd)
 		float flMove = (pLocal->IsDucking() ? 3 : 1) * ((bVar = !bVar) ? 1 : -1);
 		Vec3 vDir = { flMove, flMove, 0 };
 
-		Vec3 vMove = Math::RotatePoint(vDir, {}, { 0, -pCmd->viewangles.y, 0 });
-		pCmd->forwardmove = vMove.x * (fmodf(fabsf(pCmd->viewangles.x), 180.f) > 90.f ? -1 : 1);
+		const float flYaw = Math::NormalizeAngle(pCmd->viewangles.y);
+		Vec3 vMove = Math::RotatePoint(vDir, {}, { 0, -flYaw, 0 });
+		const float flPitch = Math::NormalizeAngle(pCmd->viewangles.x);
+		pCmd->forwardmove = vMove.x * (fabsf(flPitch) > 90.f ? -1 : 1);
 		pCmd->sidemove = -vMove.y;
-
-		pLocal->m_vecVelocity() = { 1, 1 }; // a bit stupid but it's probably fine
 	}
 }
 
@@ -210,6 +213,19 @@ void CAntiAim::MinWalk(CTFPlayer* pLocal, CUserCmd* pCmd)
 
 void CAntiAim::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, bool bSendPacket)
 {
+	static bool bAutoEnabled = false;
+	const bool bTauntSpinActive = Vars::AntiAim::TauntSpin.Value && pLocal->IsTaunting();
+	if (bTauntSpinActive && !Vars::AntiAim::Enabled.Value)
+	{
+		Vars::AntiAim::Enabled.Value = true;
+		bAutoEnabled = true;
+	}
+	else if (!bTauntSpinActive && bAutoEnabled)
+	{
+		Vars::AntiAim::Enabled.Value = false;
+		bAutoEnabled = false;
+	}
+
 	G::AntiAim = AntiAimOn() && ShouldRun(pLocal, pWeapon, pCmd);
 
 	int iAntiBackstab = F::Misc.AntiBackstab(pLocal, pCmd, bSendPacket);
@@ -226,16 +242,18 @@ void CAntiAim::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd, bo
 	vEdgeTrace.clear();
 
 	Vec2& vAngles = bSendPacket ? vFakeAngles : vRealAngles;
-	vAngles.x = iAntiBackstab != 2 ? GetPitch(pCmd->viewangles.x) : pCmd->viewangles.x;
+	vAngles.x = bTauntSpinActive || iAntiBackstab == 2 ? pCmd->viewangles.x : GetPitch(pCmd->viewangles.x);
 	vAngles.y = !iAntiBackstab ? GetYaw(pLocal, pCmd, bSendPacket) : pCmd->viewangles.y;
 
 	if (F::AntiCheatCompatibility.Active())
 		Math::ClampAngles(vAngles);
-	SDK::FixMovement(pCmd, vAngles);
+	Vec2 vFixAngles = { Math::NormalizeAngle(vAngles.x), Math::NormalizeAngle(vAngles.y) };
+	SDK::FixMovement(pCmd, vFixAngles);
 	pCmd->viewangles.x = vAngles.x;
 	pCmd->viewangles.y = vAngles.y;
 
-	MinWalk(pLocal, pCmd);
+	if (!bTauntSpinActive)
+		MinWalk(pLocal, pCmd);
 }
 
 void CAntiAim::Draw(CTFPlayer* pLocal)

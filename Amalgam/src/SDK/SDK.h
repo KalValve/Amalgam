@@ -84,6 +84,7 @@ namespace SDK
 	void Output(const char* sFunction, const char* sLog = nullptr, Color_t tColor = { 255, 255, 255, 255 },
 		int iTo = OUTPUT_CONSOLE, const char* sIcon = nullptr, int iMessageBox = MB_NONE,
 		const char* sLeft = "[", const char* sRight = "]");
+	void BotDiagnostic(const char* sComponent, const std::string& sMessage);
 
 	void SetClipboard(const std::string& sString);
 	std::string GetClipboard();
@@ -133,6 +134,9 @@ namespace SDK
 	const char* GetClassByIndex(const int nClass, bool bLower = true);
 	float AttribHookValue(float value, const char* name, void* econent, void* buffer = nullptr, bool isGlobalConstString = true);
 	float MaxSpeed(CTFPlayer* pPlayer, bool bIncludeCrouch = false, bool bIgnoreSpecialAbility = false);
+	bool WeaponDoesNotUseAmmo(int iWeaponID, int iDefIdx, bool bIncludeInfiniteAmmo = true);
+	bool WeaponDoesNotUseAmmo(CTFWeaponBase* pWeapon, bool bIncludeInfiniteAmmo = true);
+	std::string GetLevelName();
 
 	EWeaponType GetWeaponType(CTFWeaponBase* pWeapon, EWeaponType* pSecondaryType = nullptr);
 	void CanAttack(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, const CUserCmd* pCmd, bool& bPrimary, bool& bSecondary, bool& bReloading);

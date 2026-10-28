@@ -1,6 +1,8 @@
 #pragma once
 #include "CEconEntity.h"
 
+MAKE_SIGNATURE(CBaseCombatWeapon_HasAmmo, "client.dll", "40 53 48 83 EC ? 83 B9 ? ? ? ? ? 48 8B D9", 0x0);
+
 class CBaseCombatWeapon : public CEconEntity
 {
 public:
@@ -28,4 +30,5 @@ public:
 	VIRTUAL(GetMaxClip1, int, 322, this);
 	VIRTUAL(GetMaxClip2, int, 323, this);
 	VIRTUAL(GetName, const char*, 334, this);
+	SIGNATURE(HasAmmo, bool, CBaseCombatWeapon, this);
 };

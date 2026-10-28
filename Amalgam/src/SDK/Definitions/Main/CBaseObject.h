@@ -1,6 +1,8 @@
 #pragma once
 #include "CBaseCombatCharacter.h"
 
+class CTFPlayer;
+
 class CBaseObject : public CBaseCombatCharacter
 {
 public:
@@ -73,7 +75,10 @@ public:
 	NETVAR(m_iState, int, "CObjectDispenser", "m_iState");
 	NETVAR(m_iAmmoMetal, int, "CObjectDispenser", "m_iAmmoMetal");
 	NETVAR(m_iMiniBombCounter, int, "CObjectDispenser", "m_iMiniBombCounter");
+	OFFSET(m_hHealingTargets, CUtlVector<CHandle<CTFPlayer>>, 0x1400);
 };
+
+class CObjectCartDispenser : public CObjectDispenser {};
 
 class CObjectTeleporter : public CBaseObject
 {

@@ -14,6 +14,7 @@
 #include "../Features/Visuals/Glow/Glow.h"
 #include "../Features/Visuals/Groups/Groups.h"
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
+#include "../Features/NavBot/NavBotCore.h"
 
 MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 	void* rcx, ClientFrameStage_t curStage)
@@ -61,6 +62,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		break;
 	}
 	case FRAME_RENDER_START:
+	{
 		for (auto& tBind : F::Binds.m_vBinds)
 		{	// don't drop inputs for binds
 			if (tBind.m_iType != BindEnum::Key)
@@ -80,5 +82,7 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 			tKey.m_bIsDouble = tKey.m_bIsDouble || bOldIsDouble;
 			tKey.m_bIsReleased = tKey.m_bIsReleased || bOldIsReleased;
 		}
+		break;
+	}
 	}
 }

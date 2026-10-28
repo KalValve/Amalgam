@@ -32,6 +32,8 @@ enum
 class CTraceFilterHitscan : public ITraceFilter
 {
 public:
+	CTraceFilterHitscan() = default;
+	CTraceFilterHitscan(CBaseEntity* pPassEntity) : pSkip(pPassEntity) {}
 	bool ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask) override;
 	TraceType_t GetTraceType() const override;
 	CBaseEntity* pSkip = nullptr;
@@ -63,9 +65,24 @@ public:
 class CTraceFilterWorldAndPropsOnly : public ITraceFilter
 {
 public:
+	CTraceFilterWorldAndPropsOnly() = default;
+	CTraceFilterWorldAndPropsOnly(const IHandleEntity* pPassEntity) : pSkip(const_cast<CBaseEntity*>(reinterpret_cast<const CBaseEntity*>(pPassEntity))) {}
 	bool ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask) override;
 	TraceType_t GetTraceType() const override;
 	CBaseEntity* pSkip = nullptr;
 
 	int iTeam = -1;
+};
+
+class CTraceFilterNavigation : public ITraceFilter
+{
+public:
+	CTraceFilterNavigation() = default;
+	CTraceFilterNavigation(const IHandleEntity* pPassEntity) : m_pSkip(const_cast<CBaseEntity*>(reinterpret_cast<const CBaseEntity*>(pPassEntity))) {}
+	bool ShouldHitEntity(IHandleEntity* pHandleEntity, int nContentsMask) override;
+	TraceType_t GetTraceType() const override;
+	CBaseEntity* m_pSkip = nullptr;
+	int m_iTeam = -1;
+	int m_iPlayer = PLAYER_NONE;
+	int m_iObject = OBJECT_NONE;
 };

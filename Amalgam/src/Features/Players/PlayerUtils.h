@@ -37,6 +37,8 @@ struct PriorityLabel_t
 	std::string m_sName = "";
 	Color_t m_tColor = {};
 	int m_iPriority = 0;
+	int m_iFollowPriority = 0;
+	int m_iVotePriority = 0;
 
 	bool m_bLabel = false;
 	bool m_bAssignable = true;
@@ -52,12 +54,12 @@ public:
 	std::unordered_map<uint32_t, std::string> m_mPlayerAliases = {};
 
 	std::vector<PriorityLabel_t> m_vTags = {
-		{ "Default", { 200, 200, 200, 255 }, 0, false, false, true },
-		{ "Ignored", { 200, 200, 200, 255 }, -1, false, true, true },
-		{ "Cheater", { 255, 100, 100, 255 }, 1, false, true, true },
-		{ "Friend", { 100, 255, 100, 255 }, 0, true, false, true },
-		{ "Party", { 100, 100, 255, 255 }, 0, true, false, true },
-		{ "F2P", { 255, 255, 255, 255 }, 0, true, false, true }
+		{ "Default", { 200, 200, 200, 255 }, 0, 0, 0, false, false, true },
+		{ "Ignored", { 200, 200, 200, 255 }, -1, 0, -1, false, true, true },
+		{ "Cheater", { 255, 100, 100, 255 }, 1, 0, 0, false, true, true },
+		{ "Friend", { 100, 255, 100, 255 }, 0, 2, -1, true, false, true },
+		{ "Party", { 100, 100, 255, 255 }, 0, 1, -1, true, false, true },
+		{ "F2P", { 255, 255, 255, 255 }, 0, 0, 0, true, false, true }
 	};
 
 	std::vector<ListPlayer> m_vPlayerCache = {};
@@ -113,6 +115,10 @@ public:
 
 	int GetPriority(uint32_t uAccountID, bool bCache = true);
 	int GetPriority(int iIndex, bool bCache = true);
+	int GetVotePriority(uint32_t uAccountID);
+	int GetVotePriority(int iIndex);
+	int GetFollowPriority(uint32_t uAccountID, bool bCache = true);
+	int GetFollowPriority(int iIndex, bool bCache = true);
 	PriorityLabel_t* GetSignificantTag(uint32_t uAccountID, int iMode = 1); // iMode: 0 - Priorities & Labels, 1 - Priorities, 2 - Labels
 	PriorityLabel_t* GetSignificantTag(int iIndex, int iMode = 1); // iMode: 0 - Priorities & Labels, 1 - Priorities, 2 - Labels
 	bool IsIgnored(uint32_t uAccountID);

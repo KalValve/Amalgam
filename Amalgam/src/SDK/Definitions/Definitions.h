@@ -41,7 +41,24 @@
 #else
 #define TIME_TO_DUCK 0.4f
 #define TIME_TO_DUCK_MS	400.0f
-#endif 
+#endif
+
+// Inventory crafting panel layout used by the AutoItem feature.
+#define CRAFTING_SLOTS_INPUT_ROWS 3
+#define CRAFTING_SLOTS_INPUT_COLUMNS 4
+#define CRAFTING_SLOTS_INPUTPANELS (CRAFTING_SLOTS_INPUT_ROWS * CRAFTING_SLOTS_INPUT_COLUMNS)
+
+class CCraftingPanel
+{
+public:
+	byte pad0[808];
+	unsigned long long m_InputItems[CRAFTING_SLOTS_INPUTPANELS];
+	const int* m_ItemPanelCriteria[CRAFTING_SLOTS_INPUTPANELS];
+	byte pad1[128];
+	int m_iCurrentlySelectedRecipe;
+	byte pad2[68];
+	int m_iCraftingAttempts;
+};
 #define TIME_TO_UNDUCK 0.2f
 #define TIME_TO_UNDUCK_MS 200.0f
 
@@ -2401,7 +2418,9 @@ enum EWeaponSlot
 {
 	SLOT_PRIMARY,
 	SLOT_SECONDARY,
-	SLOT_MELEE
+	SLOT_MELEE,
+	SLOT_PDA1,
+	SLOT_PDA2
 };
 
 enum ProjectileType_t

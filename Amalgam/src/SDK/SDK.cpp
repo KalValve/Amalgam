@@ -1,5 +1,9 @@
 #include "SDK.h"
 
+#include <filesystem>
+#include <fstream>
+#include <mutex>
+
 #include "../Features/ImGui/Notifications/Notifications.h"
 #include "../Features/ImGui/Menu/Menu.h"
 #include "../Features/EnginePrediction/EnginePrediction.h"
@@ -74,6 +78,24 @@ void SDK::Output(const char* sFunction, const char* sLog, Color_t tColor,
 			I::TFPartyClient->SendPartyChat(sFunction);
 		if (iMessageBox != -1)
 			MessageBox(nullptr, "", sFunction, iMessageBox);
+	}
+}
+
+void SDK::BotDiagnostic(const char* sComponent, const std::string& sMessage)
+{
+	static std::mutex sMutex;
+	std::lock_guard<std::mutex> lock(sMutex);
+
+	try
+	{
+		const auto sPath = std::filesystem::temp_directory_path() / "AmalgamBotDiagnostics.log";
+		std::ofstream file(sPath, std::ios::out | std::ios::app);
+		if (file.is_open())
+			file << '[' << GetTime() << "] [" << (sComponent ? sComponent : "Bot") << "] " << sMessage << std::endl;
+	}
+	catch (...)
+	{
+		// Diagnostics must never interfere with the game's command processing.
 	}
 }
 
@@ -935,6 +957,59 @@ void SDK::GetProjectileFireSetup(CTFPlayer* pPlayer, const Vec3& vAngIn, Vec3 vO
 	}
 	else
 		vAngOut = vAngIn;
+}
+
+bool SDK::WeaponDoesNotUseAmmo(int iWeaponID, int iDefIdx, bool bIncludeInfiniteAmmo)
+{
+	switch (iWeaponID)
+	{
+	case TF_WEAPON_PARTICLE_CANNON:
+	case TF_WEAPON_RAYGUN:
+	case TF_WEAPON_DRG_POMSON: return bIncludeInfiniteAmmo;
+	case TF_WEAPON_FLAREGUN_REVENGE:
+	case TF_WEAPON_MEDIGUN:
+	case TF_WEAPON_PDA:
+	case TF_WEAPON_PDA_ENGINEER_BUILD:
+	case TF_WEAPON_PDA_ENGINEER_DESTROY:
+	case TF_WEAPON_PDA_SPY:
+	case TF_WEAPON_PDA_SPY_BUILD:
+	case TF_WEAPON_BUILDER:
+	case TF_WEAPON_INVIS:
+	case TF_WEAPON_LUNCHBOX:
+	case TF_WEAPON_THROWABLE:
+	case TF_WEAPON_JAR:
+	case TF_WEAPON_JAR_GAS:
+	case TF_WEAPON_JAR_MILK:
+	case TF_WEAPON_GRAPPLINGHOOK: return true;
+	default: return iDefIdx == -1;
+	}
+}
+
+bool SDK::WeaponDoesNotUseAmmo(CTFWeaponBase* pWeapon, bool bIncludeInfiniteAmmo)
+{
+	return pWeapon && WeaponDoesNotUseAmmo(pWeapon->GetWeaponID(), pWeapon->m_iItemDefinitionIndex(), bIncludeInfiniteAmmo);
+}
+
+std::string SDK::GetLevelName()
+{
+	const char* sLevel = I::EngineClient ? I::EngineClient->GetLevelName() : nullptr;
+	if (!sLevel || !*sLevel)
+		return {};
+	std::string sName(sLevel);
+	if (const auto iSlash = sName.find_last_of("/\\"); iSlash != std::string::npos)
+		sName.erase(0, iSlash + 1);
+	if (const auto iExt = sName.rfind(".bsp"); iExt != std::string::npos)
+		sName.resize(iExt);
+	return sName;
+}
+
+bool TriggerData_t::PointIsWithin(Vec3 vPoint) const
+{
+	const Vec3 vWorldMins = m_vOrigin + m_vMins;
+	const Vec3 vWorldMaxs = m_vOrigin + m_vMaxs;
+	return vPoint.x >= std::min(vWorldMins.x, vWorldMaxs.x) && vPoint.x <= std::max(vWorldMins.x, vWorldMaxs.x)
+		&& vPoint.y >= std::min(vWorldMins.y, vWorldMaxs.y) && vPoint.y <= std::max(vWorldMins.y, vWorldMaxs.y)
+		&& vPoint.z >= std::min(vWorldMins.z, vWorldMaxs.z) && vPoint.z <= std::max(vWorldMins.z, vWorldMaxs.z);
 }
 
 bool SDK::CleanScreenshot()

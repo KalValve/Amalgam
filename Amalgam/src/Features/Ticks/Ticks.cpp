@@ -33,11 +33,12 @@ void CTicks::Recharge(CTFPlayer* pLocal)
 		m_iDeficit--, m_iShiftedTicks--;
 	}
 
-	if (!Vars::Doubletap::RechargeTicks.Value && !bPassive
+	if (!Vars::Doubletap::RechargeTicks.Value && !bPassive && !m_bRechargeQueue
 		|| m_bDoubletap || m_bWarp || m_iShiftedTicks == m_iMaxShift || m_bSpeedhack)
 		return;
 
 	m_bRecharge = true;
+	m_bRechargeQueue = false;
 	m_iShiftedGoal = m_iShiftedTicks + 1;
 }
 

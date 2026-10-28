@@ -6,6 +6,9 @@
 #include "../../Features/CheatDetection/CheatDetection.h"
 #include "../../Features/CritHack/CritHack.h"
 #include "../../Features/Misc/Misc.h"
+#ifdef TEXTMODE
+#include "../../Features/Misc/NamedPipe/NamedPipe.h"
+#endif
 #include "../../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../../Features/Output/Output.h"
 #include "../../Features/Resolver/Resolver.h"
@@ -14,7 +17,7 @@
 bool CEventListener::Initialize()
 {
 	std::vector<const char*> vEvents = { 
-		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "player_connect_client", "player_spawn", "player_changeclass", "player_hurt", "vote_cast", "item_pickup", "revive_player_notify"
+		"client_beginconnect", "client_connected", "client_disconnect", "game_newmap", "teamplay_round_start", "scorestats_accumulated_update", "mvm_reset_stats", "player_connect_client", "player_spawn", "player_death", "vote_maps_changed", "player_changeclass", "player_hurt", "vote_cast", "item_pickup", "revive_player_notify"
 	};
 
 	for (auto szEvent : vEvents)
@@ -51,6 +54,9 @@ void CEventListener::FireGameEvent(IGameEvent* pEvent)
 	F::CritHack.Event(pEvent, uHash, pLocal);
 	F::AutoHeal.Event(pEvent, uHash);
 	F::Misc.Event(pEvent, uHash);
+#ifdef TEXTMODE
+	F::NamedPipe.Event(pEvent, uHash);
+#endif
 	F::Visuals.Event(pEvent, uHash);
 	switch (uHash)
 	{

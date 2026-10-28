@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="DebugAVX2|Win32">
@@ -772,7 +772,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="Release";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TEXTMODE;NDEBUG;_CONSOLE;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;__CONFIGURATION__="Release";__PLATFORM__="x64";%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -928,7 +928,9 @@
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoItem\AutoItem.cpp" />
     <ClCompile Include="src\Features\Misc\Misc.cpp" />
+    <ClCompile Include="src\Features\Misc\NamedPipe\NamedPipe.cpp" />
     <ClCompile Include="src\Features\NetworkFix\NetworkFix.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpread.cpp" />
     <ClCompile Include="src\Features\NoSpread\NoSpreadHitscan\NoSpreadHitscan.cpp" />
@@ -1016,6 +1018,7 @@
     <ClCompile Include="src\Hooks\CStaticPropMgr_ComputePropOpacity.cpp" />
     <ClCompile Include="src\Hooks\CStaticPropMgr_DrawStaticProps.cpp" />
     <ClCompile Include="src\Hooks\CStudioRender_DrawModelStaticProp.cpp" />
+    <ClCompile Include="src\Hooks\CTFGCClientSystem_SOCreated.cpp" />
     <ClCompile Include="src\Hooks\CTFBadgePanel_SetupBadge.cpp" />
     <ClCompile Include="src\Hooks\CTFClientScoreBoardDialog_UpdatePlayerAvatar.cpp" />
     <ClCompile Include="src\Hooks\CTFInput_ApplyMouse.cpp" />
@@ -1241,7 +1244,9 @@
     <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoBlack.h" />
     <ClInclude Include="src\Features\ImGui\Fonts\Roboto\RobotoMedium.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
+    <ClInclude Include="src\Features\Misc\AutoItem\AutoItem.h" />
     <ClInclude Include="src\Features\Misc\Misc.h" />
+    <ClInclude Include="src\Features\Misc\NamedPipe\NamedPipe.h" />
     <ClInclude Include="src\Features\NetworkFix\NetworkFix.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpread.h" />
     <ClInclude Include="src\Features\NoSpread\NoSpreadHitscan\NoSpreadHitscan.h" />
@@ -1398,6 +1403,7 @@
     <ClInclude Include="src\SDK\Definitions\Interfaces\CClientState.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CGlobalVarsBase.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CTFPartyClient.h" />
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFInventoryManager.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\IClientEntityList.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\ICVar.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\IEngineVGui.h" />
@@ -1531,4 +1537,37 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\boost.1.87.0\build\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost.1.87.0\build\boost.targets'))" />
   </Target>
+  <ItemGroup>
+    <ClCompile Include="src\Features\AutoJoin\AutoJoin.cpp" />
+    <ClInclude Include="src\Features\AutoJoin\AutoJoin.h" />
+    <ClCompile Include="src\Features\FollowBot\FollowBot.cpp" />
+    <ClInclude Include="src\Features\FollowBot\FollowBot.h" />
+    <ClCompile Include="src\Features\NavBot\BotUtils.cpp" />
+    <ClInclude Include="src\Features\NavBot\BotUtils.h" />
+    <ClCompile Include="src\Features\NavBot\Hazards.cpp" />
+    <ClInclude Include="src\Features\NavBot\Hazards.h" />
+    <ClCompile Include="src\Features\NavBot\Map.cpp" />
+    <ClInclude Include="src\Features\NavBot\Map.h" />
+    <ClInclude Include="src\Features\NavBot\NavArea.h" />
+    <ClCompile Include="src\Features\NavBot\NavBotConfig.cpp" />
+    <ClInclude Include="src\Features\NavBot\NavBotConfig.h" />
+    <ClCompile Include="src\Features\NavBot\NavBotCore.cpp" />
+    <ClInclude Include="src\Features\NavBot\NavBotCore.h" />
+    <ClCompile Include="src\Features\NavBot\NavEngine.cpp" />
+    <ClInclude Include="src\Features\NavBot\NavEngine.h" />
+    <ClCompile Include="src\Features\NavBot\Objectives.cpp" />
+    <ClInclude Include="src\Features\NavBot\Objectives.h" />
+    <ClCompile Include="src\Features\NavBot\PathWorker.cpp" />
+    <ClInclude Include="src\Features\NavBot\PathWorker.h" />
+    <ClInclude Include="src\Features\NavBot\TFConstants.h" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Capture.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Engineer.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\EscapeDanger.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\GetSupplies.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\JobSystem.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\MVMSniper.cpp" />
+    <ClInclude Include="src\Features\NavBot\Jobs\NavBotJobs.h" />
+    <ClCompile Include="src\Features\NavBot\Jobs\Roam.cpp" />
+    <ClCompile Include="src\Features\NavBot\Jobs\StayNear.cpp" />
+  </ItemGroup>
 </Project>

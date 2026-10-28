@@ -8,6 +8,10 @@
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Spectate/Spectate.h"
+#ifdef TEXTMODE
+#include "../Features/Misc/NamedPipe/NamedPipe.h"
+#include "../Features/NavBot/NavEngine.h"
+#endif
 #include "../SDK/Events/Events.h"
 #include <Psapi.h>
 
@@ -141,6 +145,10 @@ void CCore::Unload()
 
 	G::Unload = true;
 	m_bFailed2 = !U::Hooks.Unload() || m_bFailed2;
+#ifdef TEXTMODE
+	F::NamedPipe.Shutdown();
+	F::NavEngine.shutdown();
+#endif
 	U::BytePatches.Unload();
 	H::Events.Unload();
 

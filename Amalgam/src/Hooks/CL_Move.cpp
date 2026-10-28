@@ -29,6 +29,7 @@ MAKE_HOOK(CL_Move, S::CL_Move(), void,
 	H::ConVars.Modify(Vars::Misc::Exploits::UnlockCVars.Value);
 	F::Backtrack.SendLerp();
 	F::Misc.PingReducer();
+	F::Misc.MicSpam();
 
 	F::Ticks.Move(accumulated_extra_samples, bFinalTick);
 

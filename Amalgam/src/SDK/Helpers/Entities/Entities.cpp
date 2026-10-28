@@ -37,6 +37,10 @@ void CEntities::Store()
 		case ETFClassID::CTFPlayerResource:
 			m_pPlayerResource = pEntity->As<CTFPlayerResource>();
 			break;
+		case ETFClassID::CTFObjectiveResource:
+		case ETFClassID::CBaseTeamObjectiveResource:
+			m_pObjectiveResource = pEntity->As<CBaseTeamObjectiveResource>();
+			break;
 		case ETFClassID::CObjectSentrygun:
 		case ETFClassID::CObjectDispenser:
 		case ETFClassID::CObjectTeleporter:
@@ -133,19 +137,22 @@ void CEntities::Store()
 			//	m_aGroups[EntityEnum::PickupSpellbook].push_back(pEntity);
 			break;
 		}
-		//case ETFClassID::CTFAmmoPack:
-		//	m_aGroups[EntityEnum::PickupAmmo].push_back(pEntity);
-		//	break;
-		//case ETFClassID::CCurrencyPack:
-		//	m_aGroups[EntityEnum::PickupMoney].push_back(pEntity);
-		//	break;
-		//case ETFClassID::CHalloweenGiftPickup:
-		//	if (pEntity->As<CHalloweenGiftPickup>()->m_hTargetPlayer().Get() == m_pLocal)
-		//		m_aGroups[EntityEnum::PickupGargoyle].push_back(pEntity);
-		//	break;
-		//case ETFClassID::CCaptureFlag:
-		//	m_aGroups[EntityEnum::WorldObjective].push_back(pEntity);
-		//	break;
+		case ETFClassID::CTFAmmoPack:
+			m_aGroups[EntityEnum::PickupAmmo].push_back(pEntity);
+			break;
+		case ETFClassID::CCurrencyPack:
+			m_aGroups[EntityEnum::PickupMoney].push_back(pEntity);
+			break;
+		case ETFClassID::CCaptureFlag:
+		case ETFClassID::CCaptureZone:
+		case ETFClassID::CFuncPasstimeGoal:
+		case ETFClassID::CPasstimeBall:
+		case ETFClassID::CTFPasstimeLogic:
+		case ETFClassID::CObjectCartDispenser:
+		case ETFClassID::CTFPlayerDestructionLogic:
+		case ETFClassID::CTFRobotDestruction_Robot:
+			m_aGroups[EntityEnum::WorldObjective].push_back(pEntity);
+			break;
 		case ETFClassID::CSniperDot:
 			m_aGroups[EntityEnum::SniperDots].push_back(pEntity);
 			break;
@@ -504,6 +511,12 @@ CTFWeaponBase* CEntities::GetWeapon()
 CTFPlayerResource* CEntities::GetResource()
 {
 	return m_pPlayerResource;
+}
+CBaseTeamObjectiveResource* CEntities::GetObjectiveResource() { return m_pObjectiveResource; }
+uint32_t CEntities::GetLocalAccountID()
+{
+	const int iLocal = I::EngineClient->GetLocalPlayer();
+	return m_pPlayerResource && m_pPlayerResource->m_bValid(iLocal) ? m_pPlayerResource->m_iAccountID(iLocal) : 0;
 }
 
 const std::vector<CBaseEntity*>& CEntities::GetGroup(uint8_t iGroup) { return m_aGroups[iGroup]; }

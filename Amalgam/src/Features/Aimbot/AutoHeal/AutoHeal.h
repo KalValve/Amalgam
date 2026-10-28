@@ -31,6 +31,7 @@ private:
 #endif
 
 public:
+	int m_iAutoSwitch = 0;
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Event(IGameEvent* pEvent, uint32_t uHash);
 #ifdef DEBUG_VACCINATOR

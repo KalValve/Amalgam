@@ -6,8 +6,8 @@
 Enum(Entity,
 	PlayerAll, PlayerEnemy, PlayerTeam,
 	BuildingAll, BuildingEnemy, BuildingTeam,
-	/*PickupHealth, PickupAmmo, PickupMoney, PickupPowerup, PickupSpellbook, PickupGargoyle,*/
-	WorldProjectile,  WorldNPC, WorldBomb, /*WorldObjective,*/
+	PickupHealth, PickupAmmo, PickupMoney,
+	WorldProjectile, WorldNPC, WorldBomb, WorldObjective,
 	LocalStickies, LocalFlares, SniperDots,
 	Invalid, GroupsMax
 )
@@ -32,6 +32,7 @@ private:
 	CTFPlayer* m_pLocal = nullptr;
 	CTFWeaponBase* m_pLocalWeapon = nullptr;
 	CTFPlayerResource* m_pPlayerResource = nullptr;
+	CBaseTeamObjectiveResource* m_pObjectiveResource = nullptr;
 
 	std::array<std::vector<CBaseEntity*>, EntityEnum::GroupsMax> m_aGroups = {};
 
@@ -69,6 +70,8 @@ public:
 	CTFPlayer* GetLocal();
 	CTFWeaponBase* GetWeapon();
 	CTFPlayerResource* GetResource();
+	CBaseTeamObjectiveResource* GetObjectiveResource();
+	uint32_t GetLocalAccountID();
 
 	const std::vector<CBaseEntity*>& GetGroup(uint8_t iGroup);
 

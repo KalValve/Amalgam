@@ -56,6 +56,7 @@ private:
 	//float m_flLastDamageTime = 0.f;
 
 public:
+	bool m_bForce = false;
 	void Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 	void Event(IGameEvent* pEvent, uint32_t uHash, CTFPlayer* pLocal);
 	void Store();

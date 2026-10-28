@@ -10,9 +10,12 @@
 #include "../../Resolver/Resolver.h"
 #include "../../Visuals/Visuals.h"
 #include "../../Misc/Misc.h"
+#include "../../Misc/AutoQueue/AutoQueue.h"
 #include "../../Output/Output.h"
 #include "../../World/World.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
+#include "../../AutoJoin/AutoJoin.h"
+#include "../../NavBot/NavEngine.h"
 
 void CMenu::DrawMenu()
 {
@@ -76,18 +79,18 @@ void CMenu::DrawMenu()
 		RenderTwoToneBackground(flSize, {}, F::Render.Background1, F::Render.Background2, 0.f, false);
 		pDrawList->PopClipRect();
 
-		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iLogsTab = 0, iSettingsTab = 0;
+		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iMiscTab = 0, iLogsTab = 0, iSettingsTab = 0;
 		PushFont(F::Render.FontBold);
 		FTabs(
 			{
 				{ "AIMBOT", "GENERAL", "DRAW" },
 				{ "HVH" },
 				{ "VISUALS", "ESP", "MISC##", "MENU" },
-				{ "MISC" },
-				{ "LOGS", "PLAYERLIST", "SETTINGS##", "OUTPUT" },
+				{ "MISC", "GENERAL", "BOTS" },
+				{ "PLAYERLIST", "SETTINGS##", "OUTPUT" },
 				{ "SETTINGS", "CONFIG", "BINDS", "MATERIALS", "MISC##" }
 			},
-			{ &iTab, &iAimbotTab, nullptr, &iVisualsTab, nullptr, &iLogsTab, &iSettingsTab },
+			{ &iTab, &iAimbotTab, nullptr, &iVisualsTab, &iMiscTab, &iLogsTab, &iSettingsTab },
 			{ flSize - H::Draw.Scale(16), H::Draw.Scale(36) },
 			{ H::Draw.Scale(8), H::Draw.Scale(8) + flOffset },
 			FTabsEnum::Vertical | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarLeft,
@@ -121,7 +124,7 @@ void CMenu::DrawMenu()
 				case 0: MenuAimbot(iAimbotTab); break;
 				case 1: MenuHVH(); break;
 				case 2: MenuVisuals(iVisualsTab); break;
-				case 3: MenuMisc(); break;
+				case 3: MenuMisc(iMiscTab); break;
 				case 4: MenuLogs(iLogsTab); break;
 				case 5: MenuSettings(iSettingsTab); break;
 				}
@@ -615,6 +618,7 @@ void CMenu::MenuAimbot(int iTab)
 		}
 		break;
 	}
+
 	}
 }
 
@@ -659,8 +663,8 @@ void CMenu::MenuHVH(int iTab)
 						FSlider(Vars::AntiAim::SpinSpeed, FSliderEnum::Left);
 					}
 					PopTransparent();
-					SetCursorPos({ GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, GetRowPos() + H::Draw.Scale(8) });
 					FToggle(Vars::AntiAim::MinWalk, FToggleEnum::Left);
+					FToggle(Vars::AntiAim::TauntSpin, FToggleEnum::Right);
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -1370,11 +1374,71 @@ void CMenu::MenuMisc(int iTab)
 					FDropdown(Vars::Misc::Automation::AntiBackstab); // pitch/fake _might_ slip up some auto backstabs
 					FToggle(Vars::Misc::Automation::TauntControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Right);
-					FToggle(Vars::Misc::Automation::AntiAutobalance, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Right);
+					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Left);
+					FToggle(Vars::Misc::Automation::AntiAutobalance, FToggleEnum::Right);
+					PushTransparent(!Vars::Misc::Automation::AntiAutobalance.Value);
+					{
+						FDropdown(Vars::Misc::Automation::AntiAutobalanceMode);
+					}
+					PopTransparent();
 					FToggle(Vars::Misc::Automation::AutoF2Ignored, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoF1Priority, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AcceptItemDrops);
+					FToggle(Vars::Misc::Automation::AutoRetry, FToggleEnum::Left);
+					FSlider(Vars::Misc::Automation::AutoRetryHealth, FSliderEnum::Right);
+					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
+					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
+					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
+					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
+				} EndSection();
+				if (Section("Voting", 8))
+				{
+					FDropdown(Vars::Misc::Automation::AutoVote);
+					PushTransparent(!(Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Defend)
+						&& !(Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Assist));
+					{
+						FToggle(Vars::Misc::Automation::AutoVoteDelay, FToggleEnum::Left);
+						PushTransparent(!Vars::Misc::Automation::AutoVoteDelay.Value);
+						{
+							FSlider(Vars::Misc::Automation::AutoVoteDelayInterval, FSliderEnum::Right);
+						}
+						PopTransparent();
+					}
+					PopTransparent();
+					FToggle(Vars::Misc::Automation::AutoVoteMap, FToggleEnum::Left);
+					FSlider(Vars::Misc::Automation::AutoVoteMapOption, FSliderEnum::Right);
+				} EndSection();
+				if (Section("Taunts", 8))
+				{
+					FToggle(Vars::Misc::Automation::AutoTaunt, FToggleEnum::Left);
+					FSlider(Vars::Misc::Automation::AutoTauntChance, FSliderEnum::Right);
+					FSlider(Vars::Misc::Automation::AutoTauntSlot);
+				} EndSection();
+				if (Section("Chat automation"))
+				{
+					FToggle(Vars::Misc::Automation::ChatSpam::Enable, FToggleEnum::Left);
+					FSlider(Vars::Misc::Automation::ChatSpam::Interval, FSliderEnum::Right);
+					PushTransparent(!Vars::Misc::Automation::ChatSpam::Enable.Value);
+					{
+						FToggle(Vars::Misc::Automation::ChatSpam::TeamChat, FToggleEnum::Left);
+						FToggle(Vars::Misc::Automation::ChatSpam::Randomize, FToggleEnum::Right);
+					}
+					PopTransparent();
+					FToggle(Vars::Misc::Automation::ChatSpam::AutoReply, FToggleEnum::Left);
+					FToggle(Vars::Misc::Automation::ChatSpam::VoteKickReply, FToggleEnum::Right);
+					FToggle(Vars::Misc::Automation::KillSay::Enable, FToggleEnum::Left);
+					FSlider(Vars::Misc::Automation::KillSay::Chance, FSliderEnum::Right);
+					PushTransparent(!Vars::Misc::Automation::KillSay::Enable.Value);
+					{
+						FToggle(Vars::Misc::Automation::KillSay::TeamChat);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Automation extras"))
+				{
+					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Left);
+					FSlider("Achievement ID", &Vars::Misc::Automation::AchievementSpamID.Value, 0, 3000, 1);
+					FToggle(Vars::Misc::Automation::CallVoteSpam, FToggleEnum::Left);
 				} EndSection();
 				if (Section("Mann vs. Machine", 8))
 				{
@@ -1423,8 +1487,48 @@ void CMenu::MenuMisc(int iTab)
 				if (Section("Queueing"))
 				{
 					FDropdown(Vars::Misc::Queueing::ForceRegions);
-					FToggle(Vars::Misc::Queueing::ExtendQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Right);
+					FToggle(Vars::Misc::Queueing::ExtendQueue);
+					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
+					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Right);
+					FToggle(Vars::Misc::Queueing::AutoBootCampQueue, FToggleEnum::Left);
+					FSlider(Vars::Misc::Queueing::QueueDelay, FSliderEnum::Right);
+					FToggle(Vars::Misc::Queueing::AutoDumpProfiles, FToggleEnum::Left);
+					FSlider(Vars::Misc::Queueing::AutoDumpDelay, FSliderEnum::Right);
+				} EndSection();
+				if (Section("Requeue"))
+				{
+					FToggle(Vars::Misc::Queueing::RQif);
+					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
+					{
+						FSlider(Vars::Misc::Queueing::RQplt);
+						FSlider(Vars::Misc::Queueing::RQpgt);
+						FToggle(Vars::Misc::Queueing::RQkick);
+						FToggle(Vars::Misc::Queueing::RQnoAbandon);
+						FToggle(Vars::Misc::Queueing::RQIgnoreFriends);
+						FToggle(Vars::Misc::Queueing::RQLTM);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Auto items"))
+				{
+					FDropdown(Vars::Misc::Automation::AutoItem::Enable);
+					FSlider(Vars::Misc::Automation::AutoItem::Interval);
+					PushTransparent(!(Vars::Misc::Automation::AutoItem::Enable.Value & Vars::Misc::Automation::AutoItem::EnableEnum::Weapons));
+					{
+						FSDropdown(Vars::Misc::Automation::AutoItem::Primary, FDropdownEnum::Left);
+						FSDropdown(Vars::Misc::Automation::AutoItem::Secondary, FDropdownEnum::Right);
+						FSDropdown(Vars::Misc::Automation::AutoItem::Melee);
+					}
+					PopTransparent();
+					PushTransparent(!(Vars::Misc::Automation::AutoItem::Enable.Value & Vars::Misc::Automation::AutoItem::EnableEnum::Hats));
+					{
+						FSlider("Hat 1", &Vars::Misc::Automation::AutoItem::FirstHat.Value, 1, 3000, 1, "%i", FSliderEnum::Left);
+						FSlider("Hat 2", &Vars::Misc::Automation::AutoItem::SecondHat.Value, 1, 3000, 1, "%i", FSliderEnum::Right);
+						FSlider("Hat 3", &Vars::Misc::Automation::AutoItem::ThirdHat.Value, 1, 3000, 1, "%i");
+					}
+					PopTransparent();
 				} EndSection();
 				if (Section("Sound"))
 				{
@@ -1438,7 +1542,177 @@ void CMenu::MenuMisc(int iTab)
 		}
 		break;
 	}
+	case 1:
+		MenuBots();
+		break;
 	}
+}
+
+void CMenu::MenuBots()
+{
+	using namespace ImGui;
+	using namespace Vars::Misc::Movement;
+
+	if (!BeginTable("BotsTable", 2))
+		return;
+
+	TableNextColumn();
+	if (Section("Nav engine"))
+	{
+		FToggle(NavEngine::Enabled);
+		TextDisabled("Active: %s | Mesh: %s", NavEngine::Enabled.Value ? "on" : "off", F::NavEngine.IsNavMeshLoaded() ? "loaded" : "not loaded");
+		TextDisabled("NavBot: %s | FollowBot: %s", NavBot::Enabled.Value ? "on" : "off", FollowBot::Enabled.Value ? "on" : "off");
+		TextDisabled("Path: %s | Priority: %d", F::NavEngine.IsPathing() ? "active" : "idle", static_cast<int>(F::NavEngine.m_eCurrentPriority));
+		if (!F::NavEngine.m_sLastFailureReason.empty())
+			TextDisabled("Last nav reason: %s", F::NavEngine.m_sLastFailureReason.c_str());
+		if (const std::string sNavPath = F::NavEngine.GetNavFilePath(); !sNavPath.empty())
+			TextDisabled("%s", sNavPath.c_str());
+		FToggle(NavEngine::PathInSetup);
+		FToggle(NavBot::SmartJump);
+		PushTransparent(!NavEngine::Enabled.Value);
+		{
+			FDropdown(NavEngine::Draw, FDropdownEnum::Multi);
+			FColorPicker(Vars::Colors::NavbotPath);
+			FColorPicker(Vars::Colors::NavbotArea, FColorPickerEnum::Left);
+			FColorPicker(Vars::Colors::NavbotBlacklist, FColorPickerEnum::Right);
+			FSlider(NavEngine::StickyIgnoreTime);
+			FSlider(NavEngine::StuckDetectTime);
+			FSlider(NavEngine::StuckBlacklistTime);
+			FSlider(NavEngine::StuckExpireTime);
+			FSlider(NavEngine::StuckTime);
+			FToggle(NavEngine::VischeckEnabled);
+			FSlider(NavEngine::VischeckTime);
+			FSlider(NavEngine::VischeckCacheTime);
+		}
+		PopTransparent();
+	} EndSection();
+	if (Section("Navbot"))
+	{
+		PushTransparent(!NavEngine::Enabled.Value);
+		{
+			FToggle(NavBot::Enabled);
+			PushTransparent(!NavBot::Enabled.Value || !NavEngine::Enabled.Value);
+			{
+				FDropdown(NavBot::RechargeDT);
+				PushTransparent(Transparent || !NavBot::RechargeDT.Value);
+				{
+					FSlider(NavBot::RechargeDTDelay);
+				}
+				PopTransparent();
+				FDropdown(NavBot::Preferences);
+				FDropdown(NavBot::Personality);
+				FDropdown(NavBot::Blacklist);
+				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::NormalThreats));
+				{
+					FSlider(NavBot::BlacklistDelay);
+				}
+				PopTransparent();
+				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::DormantThreats));
+				{
+					FSlider(NavBot::BlacklistDormantDelay);
+				}
+				PopTransparent();
+				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::NormalThreats) && !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::DormantThreats));
+				{
+					FSlider(NavBot::BlacklistSlightDangerLimit);
+				}
+				PopTransparent();
+				FSlider(NavBot::MeleeTargetRange);
+				FToggle(NavBot::DangerOverlay);
+				PushTransparent(!NavBot::DangerOverlay.Value);
+				{
+					FSlider(NavBot::DangerOverlayMaxDist);
+				}
+				PopTransparent();
+			}
+			PopTransparent();
+		}
+		PopTransparent();
+	} EndSection();
+	if (Vars::Debug::Options.Value)
+	{
+		if (Section("Navbot debug"))
+		{
+			FSlider(NavBot::StickyDangerRange);
+			FSlider(NavBot::ProjectileDangerRange);
+			FToggle(NavEngine::OffPathRepath);
+		} EndSection();
+	}
+
+	TableNextColumn();
+	if (Section("Followbot"))
+	{
+		using namespace FollowBot;
+		FToggle(Enabled);
+		PushTransparent(!NavEngine::Enabled.Value);
+		{
+			FDropdown(UseNav);
+		}
+		PopTransparent();
+		FDropdown(Targets);
+		FDropdown(Prefer);
+		FDropdown(LookAtPath);
+		PushTransparent(!LookAtPath.Value);
+		{
+			FDropdown(LookAtPathMode);
+			FToggle(LookAtPathNoSnap);
+		}
+		PopTransparent();
+		FSlider(MaxNodes);
+		FSlider(MinPriority);
+		FSlider(ActivationDistance);
+		FSlider(FollowDistance);
+		FSlider(AbandonDistance);
+		PushTransparent(!UseNav.Value);
+		{
+			FSlider(NavAbandonDistance);
+		}
+		PopTransparent();
+		FToggle(DrawPath);
+		FColorPicker(Vars::Colors::FollowbotPathLine, FColorPickerEnum::Left);
+		FColorPicker(Vars::Colors::FollowbotPathBox, FColorPickerEnum::Right);
+	} EndSection();
+	if (Section("Bot utils"))
+	{
+		PushTransparent(!NavEngine::Enabled.Value);
+		{
+			FDropdown(NavEngine::LookAtPath);
+		}
+		PopTransparent();
+		PushTransparent(!NavEngine::LookAtPath.Value && !FollowBot::LookAtPath.Value);
+		{
+			FSlider(BotUtils::LookAtPathSpeed);
+			FToggle(BotUtils::LookAtPathDebug);
+		}
+		PopTransparent();
+		FDropdown(BotUtils::WeaponSlot);
+		FDropdown(BotUtils::AutoScope);
+		PushTransparent(!BotUtils::AutoScope.Value);
+		{
+			FSlider(BotUtils::AutoScopeCancelTime);
+		}
+		PopTransparent();
+		FToggle(BotUtils::AutoHeatmakerFocus);
+	} EndSection();
+	if (Section("Autojoin"))
+	{
+		FDropdown(Vars::Misc::Automation::ForceClass, { "Off", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }, { 0, 1, 3, 7, 4, 6, 9, 5, 2, 8 });
+		TextDisabled("Configured class ID: %d | Active class ID: %d", Vars::Misc::Automation::ForceClass[DEFAULT_BIND], Vars::Misc::Automation::ForceClass.Value);
+		TextDisabled("Runtime: %s", F::AutoJoin.m_sStatus.c_str());
+		FToggle(Vars::Misc::Automation::RandomClass);
+		PushTransparent(!Vars::Misc::Automation::RandomClass.Value);
+		{
+			FDropdown(Vars::Misc::Automation::RandomClassExclude, FDropdownEnum::Multi);
+			FSlider(Vars::Misc::Automation::RandomClassInterval);
+		}
+		PopTransparent();
+	} EndSection();
+	if (Section("Named pipe"))
+	{
+		FToggle(Vars::Misc::Automation::NamedPipe);
+	} EndSection();
+
+	EndTable();
 }
 
 void CMenu::MenuLogs(int iTab)
@@ -1838,7 +2112,8 @@ void CMenu::MenuLogs(int iTab)
 			static int iID = -1;
 			static PriorityLabel_t tTag = {};
 
-			auto vTable = WidgetTable(3, H::Draw.Scale(48), { GetWindowWidth() / 2, GetWindowWidth() / 2 - H::Draw.Scale(90) - GetStyle().WindowPadding.x });
+			// Three stacked priority controls need their own vertical space before the tag list.
+			auto vTable = WidgetTable(3, H::Draw.Scale(112), { GetWindowWidth() / 2, GetWindowWidth() / 2 - H::Draw.Scale(90) - GetStyle().WindowPadding.x });
 
 			if (BeginWidgetTable(0, vTable))
 			{
@@ -1862,6 +2137,8 @@ void CMenu::MenuLogs(int iTab)
 				{
 					SetCursorPosY(GetCursorPos().y + H::Draw.Scale(12));
 					FSlider("Priority", &tTag.m_iPriority, -10, 10);
+					FSlider("Followbot priority", &tTag.m_iFollowPriority, -1, 10, 1, tTag.m_iFollowPriority < 0 ? "Ignore" : "%i");
+					FDropdown("Vote priority", &tTag.m_iVotePriority, { "Defend", "Ignore", "Kick" }, { -1, 0, 1 }, FDropdownEnum::Right);
 				}
 				PopTransparent();
 			} EndChild();
@@ -1885,11 +2162,13 @@ void CMenu::MenuLogs(int iTab)
 				if (bCreate)
 				{
 					F::PlayerUtils.m_bSave = true;
-					if (iID > -1 || iID < F::PlayerUtils.m_vTags.size())
+					if (iID >= 0 && iID < int(F::PlayerUtils.m_vTags.size()))
 					{
 						F::PlayerUtils.m_vTags[iID].m_sName = tTag.m_sName;
 						F::PlayerUtils.m_vTags[iID].m_tColor = tTag.m_tColor;
 						F::PlayerUtils.m_vTags[iID].m_iPriority = tTag.m_iPriority;
+						F::PlayerUtils.m_vTags[iID].m_iFollowPriority = tTag.m_iFollowPriority;
+						F::PlayerUtils.m_vTags[iID].m_iVotePriority = tTag.m_iVotePriority;
 						F::PlayerUtils.m_vTags[iID].m_bLabel = tTag.m_bLabel;
 					}
 					else
@@ -1906,7 +2185,7 @@ void CMenu::MenuLogs(int iTab)
 			{
 				int _iID = std::distance(F::PlayerUtils.m_vTags.begin(), it);
 
-				ImVec2 vOriginalPos = { !_tTag.m_bLabel ? GetStyle().WindowPadding.x : GetWindowWidth() * 2 / 3 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(96 + 36 * y) };
+				ImVec2 vOriginalPos = { !_tTag.m_bLabel ? GetStyle().WindowPadding.x : GetWindowWidth() * 2 / 3 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(160 + 36 * y) };
 
 				// background
 				float flWidth = GetWindowWidth() * (_tTag.m_bLabel ? 1.f / 3 : 2.f / 3) - GetStyle().WindowPadding.x * 1.5f;
@@ -1966,6 +2245,8 @@ void CMenu::MenuLogs(int iTab)
 					tTag.m_sName = _tTag.m_sName;
 					tTag.m_tColor = _tTag.m_tColor;
 					tTag.m_iPriority = _tTag.m_iPriority;
+					tTag.m_iFollowPriority = _tTag.m_iFollowPriority;
+						tTag.m_iVotePriority = _tTag.m_iVotePriority;
 					tTag.m_bLabel = _tTag.m_bLabel;
 				}
 				else if (bPopup)
@@ -2004,6 +2285,8 @@ void CMenu::MenuLogs(int iTab)
 					}
 					PopDisabled();
 					if (FSlider("Priority##", &_tTag2.m_iPriority, -10, 10))
+						bSave = true;
+					if (FSlider("Followbot priority##", &_tTag2.m_iFollowPriority, -1, 10, 1, _tTag2.m_iFollowPriority < 0 ? "Ignore" : "%i"))
 						bSave = true;
 
 					if (bSave)
@@ -2054,8 +2337,8 @@ void CMenu::MenuLogs(int iTab)
 			};
 
 			PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
-			SetCursorPos({ H::Draw.Scale(13), H::Draw.Scale(80) }); FText("Priorities");
-			SetCursorPos({ GetWindowWidth() * 2 / 3 + H::Draw.Scale(9), H::Draw.Scale(80) }); FText("Labels");
+			SetCursorPos({ H::Draw.Scale(13), H::Draw.Scale(144) }); FText("Priorities");
+			SetCursorPos({ GetWindowWidth() * 2 / 3 + H::Draw.Scale(9), H::Draw.Scale(144) }); FText("Labels");
 			PopStyleColor();
 
 			std::vector<std::pair<std::vector<PriorityLabel_t>::iterator, PriorityLabel_t>> vPriorities = {}, vLabels = {};
@@ -2104,7 +2387,7 @@ void CMenu::MenuLogs(int iTab)
 				fDrawTag(it, _tTag, iLabels);
 				iLabels++;
 			}
-			SetCursorPos({ 0, H::Draw.Scale(60 + 36 * std::max(iPriorities, iLabels)) }); DebugDummy({ 0, H::Draw.Scale(28) });
+			SetCursorPos({ 0, H::Draw.Scale(124 + 36 * std::max(iPriorities, iLabels)) }); DebugDummy({ 0, H::Draw.Scale(28) });
 		} EndSection();
 		{
 			PushDisabled(F::PlayerUtils.m_bLoad);
@@ -2157,12 +2440,12 @@ void CMenu::MenuLogs(int iTab)
 							mPlayerAliases.clear();
 							mAs.clear();
 							vTags = {
-								{ "Default", { 200, 200, 200, 255 }, 0, false, false, true },
-								{ "Ignored", { 200, 200, 200, 255 }, -1, false, true, true },
-								{ "Cheater", { 255, 100, 100, 255 }, 1, false, true, true },
-								{ "Friend", { 100, 255, 100, 255 }, 0, true, false, true },
-								{ "Party", { 100, 100, 255, 255 }, 0, true, false, true },
-								{ "F2P", { 255, 255, 255, 255 }, 0, true, false, true }
+													{ "Default", { 200, 200, 200, 255 }, 0, 0, 0, false, false, true },
+													{ "Ignored", { 200, 200, 200, 255 }, -1, 0, -1, false, true, true },
+													{ "Cheater", { 255, 100, 100, 255 }, 1, 0, 0, false, true, true },
+													{ "Friend", { 100, 255, 100, 255 }, 0, 2, -1, true, false, true },
+													{ "Party", { 100, 100, 255, 255 }, 0, 1, -1, true, false, true },
+													{ "F2P", { 255, 255, 255, 255 }, 0, 0, 0, true, false, true }
 							};
 
 							if (auto tSub = tRead.get_child_optional("Config"))
@@ -2173,6 +2456,8 @@ void CMenu::MenuLogs(int iTab)
 									F::Configs.LoadJson(tChild, "Name", tTag.m_sName);
 									F::Configs.LoadJson(tChild, "Color", tTag.m_tColor);
 									F::Configs.LoadJson(tChild, "Priority", tTag.m_iPriority);
+									F::Configs.LoadJson(tChild, "FollowPriority", tTag.m_iFollowPriority);
+									F::Configs.LoadJson(tChild, "VotePriority", tTag.m_iVotePriority);
 									F::Configs.LoadJson(tChild, "Label", tTag.m_bLabel);
 
 									int iID = F::PlayerUtils.TagToIndex(std::stoi(sName));
@@ -2181,6 +2466,8 @@ void CMenu::MenuLogs(int iTab)
 										vTags[iID].m_sName = tTag.m_sName;
 										vTags[iID].m_tColor = tTag.m_tColor;
 										vTags[iID].m_iPriority = tTag.m_iPriority;
+										vTags[iID].m_iFollowPriority = tTag.m_iFollowPriority;
+										vTags[iID].m_iVotePriority = tTag.m_iVotePriority;
 										vTags[iID].m_bLabel = tTag.m_bLabel;
 									}
 									else
@@ -4158,6 +4445,7 @@ void CMenu::Render()
 		AddDraggable("Ping", Vars::Menu::PingDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ping);
 		AddDraggable("Conditions", Vars::Menu::ConditionsDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Conditions);
 		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction);
+		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot));
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 
 		F::Render.Cursor = GetMouseCursor();

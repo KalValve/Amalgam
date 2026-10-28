@@ -10,4 +10,7 @@ public:
 	bool Check(float flS) const;
 	bool Run(float flS);
 	void Update();
+	float GetLastUpdate() const { return m_flLast; }
+	void operator-=(float flS) { m_flLast -= flS; }
+	void operator+=(float flS) { m_flLast += flS; }
 };

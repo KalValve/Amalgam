@@ -77,6 +77,7 @@
     <ClCompile Include="src\Utils\ExceptionHandler\ExceptionHandler.cpp" />
     <ClCompile Include="src\BytePatches\BytePatches.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
+    <ClCompile Include="src\Features\Misc\AutoItem\AutoItem.cpp" />
     <ClCompile Include="src\Features\Spectate\Spectate.cpp" />
     <ClCompile Include="src\Hooks\CHLClient_FrameStageNotify.cpp" />
     <ClCompile Include="src\Hooks\bf_read_ReadString.cpp" />
@@ -126,6 +127,7 @@
     <ClCompile Include="src\Hooks\CStaticPropMgr_ComputePropOpacity.cpp" />
     <ClCompile Include="src\Hooks\CStaticPropMgr_DrawStaticProps.cpp" />
     <ClCompile Include="src\Hooks\CStudioRender_DrawModelStaticProp.cpp" />
+    <ClCompile Include="src\Hooks\CTFGCClientSystem_SOCreated.cpp" />
     <ClCompile Include="src\Hooks\CTFBadgePanel_SetupBadge.cpp" />
     <ClCompile Include="src\Hooks\CTFClientScoreBoardDialog_UpdatePlayerAvatar.cpp" />
     <ClCompile Include="src\Hooks\CTFInput_ApplyMouse.cpp" />
@@ -348,6 +350,7 @@
     <ClInclude Include="src\SDK\Helpers\ConVars\ConVars.h" />
     <ClInclude Include="src\Features\Commands\Commands.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CTFPartyClient.h" />
+    <ClInclude Include="src\SDK\Definitions\Interfaces\CTFInventoryManager.h" />
     <ClInclude Include="src\SDK\Definitions\Steam\ISteamController.h" />
     <ClInclude Include="src\SDK\Definitions\Steam\ISteamFriends.h" />
     <ClInclude Include="src\SDK\Definitions\Steam\ISteamGameServer.h" />
@@ -566,6 +569,7 @@
     <ClInclude Include="src\SDK\Definitions\Main\CEconEntity.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CEconWearable.h" />
     <ClInclude Include="src\Features\Misc\AutoVote\AutoVote.h" />
+    <ClInclude Include="src\Features\Misc\AutoItem\AutoItem.h" />
     <ClInclude Include="src\Features\Spectate\Spectate.h" />
     <ClInclude Include="src\SDK\Definitions\Interfaces\CHLClient.h" />
     <ClInclude Include="src\SDK\Definitions\Main\CSniperDot.h" />

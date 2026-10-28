@@ -64,7 +64,7 @@ bool CAimbotGlobal::EntityCenterInFOV(CBaseEntity* pTarget, const Vec3& vLocalPo
 	vAngleTo = Math::CalcAngle(vLocalPos, vPos);
 	flFOVTo = Math::CalcFov(vLocalAngles, vAngleTo);
 
-	return flFOVTo < GetAimFOV();
+	return Vars::Aimbot::General::AimFOV.Value >= 360.f || flFOVTo < GetAimFOV();
 }
 
 bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, const Vec3& vLocalAngles, float& flFOVTo, Vec3& vPos, Vec3& vAngleTo, int iHitboxes)
@@ -110,7 +110,7 @@ bool CAimbotGlobal::PlayerBoneInFOV(CTFPlayer* pTarget, const Vec3& vLocalPos, c
 		}
 	}
 
-	return flMinFOV < GetAimFOV();
+	return Vars::Aimbot::General::AimFOV.Value >= 360.f || flMinFOV < GetAimFOV();
 }
 
 bool CAimbotGlobal::IsHitboxValid(CBaseEntity* pEntity, int nHitbox, int iHitboxes)
@@ -191,7 +191,8 @@ bool CAimbotGlobal::ShouldAimAtAngle(Vec3 vAngles)
 	if (!Vars::Aimbot::General::LeadAndRestrict.Value)
 		return true;
 
-	return Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) < Vars::Aimbot::General::AimFOV.Value;
+	return Vars::Aimbot::General::AimFOV.Value >= 360.f
+		|| Math::CalcFov(I::EngineClient->GetViewAngles(), vAngles) < Vars::Aimbot::General::AimFOV.Value;
 }
 
 bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWeaponBase* pWeapon, int iFunctionFlags, int iTargetFlags, int iIgnoreFlags)

@@ -177,8 +177,8 @@ NAMESPACE_BEGIN(Vars)
 		CVar(MenuShowsBinds, "Menu shows binds", false, NOBIND);
 
 		CVarEnum(Indicators, "Indicators", 0b00000, VISUAL | DROPDOWN_MULTI, nullptr,
-			VA_LIST("Ticks", "Crit hack", "Spectators", "Ping", "Conditions", "Seed prediction"),
-			Ticks = 1 << 0, CritHack = 1 << 1, Spectators = 1 << 2, Ping = 1 << 3, Conditions = 1 << 4, SeedPrediction = 1 << 5);
+			VA_LIST("Ticks", "Crit hack", "Spectators", "Ping", "Conditions", "Seed prediction", "Navbot"),
+			Ticks = 1 << 0, CritHack = 1 << 1, Spectators = 1 << 2, Ping = 1 << 3, Conditions = 1 << 4, SeedPrediction = 1 << 5, NavBot = 1 << 6);
 
 		CVar(BindsDisplay, "Binds display", DragBox_t(100, 100), VISUAL | NOBIND);
 		CVar(TicksDisplay, "Ticks display", DragBox_t(), VISUAL | NOBIND);
@@ -187,6 +187,7 @@ NAMESPACE_BEGIN(Vars)
 		CVar(PingDisplay, "Ping display", DragBox_t(), VISUAL | NOBIND);
 		CVar(ConditionsDisplay, "Conditions display", DragBox_t(), VISUAL | NOBIND);
 		CVar(SeedPredictionDisplay, "Seed prediction display", DragBox_t(), VISUAL | NOBIND);
+		CVar(NavBotDisplay, "Navbot display", DragBox_t(), VISUAL | NOBIND);
 
 		CVar(Scale, "Scale", 1.f, NOBIND | SLIDER_MIN | SLIDER_PRECISION | SLIDER_NOAUTOUPDATE, 0.75f, 2.f, 0.25f);
 		CVar(CheapText, "Cheap text", false, NOBIND);
@@ -245,6 +246,11 @@ NAMESPACE_BEGIN(Vars)
 		CVar(ShotPathIgnoreZ, "Shot path ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
 		CVar(SplashRadius, "Splash radius color", Color_t(255, 255, 255, 0), VISUAL);
 		CVar(SplashRadiusIgnoreZ, "Splash radius ignore Z color", Color_t(255, 255, 255, 255), VISUAL);
+		CVar(NavbotPath, "Navbot path color", Color_t(255, 255, 0, 255), VISUAL);
+		CVar(NavbotArea, "Navbot area color", Color_t(0, 255, 0, 255), VISUAL);
+		CVar(NavbotBlacklist, "Navbot blacklisted color", Color_t(255, 0, 0, 255), VISUAL);
+		CVar(FollowbotPathLine, "Followbot path line color", Color_t(255, 255, 0, 255), VISUAL);
+		CVar(FollowbotPathBox, "Followbot path box color", Color_t(255, 255, 0, 255), VISUAL);
 		CVar(RealPath, "Real path color", Color_t(255, 255, 255, 0), NOSAVE | DEBUGVAR);
 		CVar(RealPathIgnoreZ, "Real path ignore Z color", Color_t(255, 255, 255, 255), NOSAVE | DEBUGVAR);
 	NAMESPACE_END(Colors)
@@ -264,7 +270,7 @@ NAMESPACE_BEGIN(Vars)
 			CVarEnum(Ignore, "Ignore", 0b00000001000, DROPDOWN_MULTI, nullptr,
 				VA_LIST("Friends", "Party", "Unprioritized", "Invulnerable", "Invisible", "Unsimulated", "Dead ringer", "Vaccinator", "Disguised", "Taunting", "Team"),
 				Friends = 1 << 0, Party = 1 << 1, Unprioritized = 1 << 2, Invulnerable = 1 << 3, Invisible = 1 << 4, Unsimulated = 1 << 5, DeadRinger = 1 << 6, Vaccinator = 1 << 7, Disguised = 1 << 8, Taunting = 1 << 9, Team = 1 << 10);
-			CVar(AimFOV, "Aim FOV", 180.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 180.f);
+			CVar(AimFOV, "Aim FOV", 360.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 360.f);
 			CVar(MaxTargets, "Max targets", 2, SLIDER_MIN, 1, 6);
 			CVar(IgnoreInvisible, "Ignore invisible", 50.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 10.f, "%g%%");
 			CVar(AssistStrength, "Assist strength", 25.f, SLIDER_CLAMP | SLIDER_PRECISION, 0.f, 100.f, 1.f, "%g%%");
@@ -497,8 +503,9 @@ NAMESPACE_BEGIN(Vars)
 		CVar(FakeYawOffset, "Fake offset", 0.f, SLIDER_CLAMP | SLIDER_PRECISION, -180.f, 180.f, 5.f);
 		CVar(RealYawValue, "Real value", 90.f, SLIDER_CLAMP | SLIDER_PRECISION, -180.f, 180.f, 5.f);
 		CVar(FakeYawValue, "Fake value", -90.f, SLIDER_CLAMP | SLIDER_PRECISION, -180.f, 180.f, 5.f);
-		CVar(SpinSpeed, "Spin speed", 15.f, SLIDER_PRECISION, -30.f, 30.f);
+		CVar(SpinSpeed, "Spin speed", 15.f, SLIDER_PRECISION, -250.f, 250.f);
 		CVar(MinWalk, "Minwalk", true);
+		CVar(TauntSpin, "Taunt Spin", false);
 		CVar(HidePitchOnShot, "Hide pitch on shot", false);
 
 		CVar(AntiAimLines, "Antiaim lines", false, NOSAVE);
@@ -726,6 +733,77 @@ NAMESPACE_BEGIN(Vars)
 			CVar(NoPush, "No push", false);
 			CVar(MovementLock, "Movement lock", false);
 
+			NAMESPACE_BEGIN(NavEngine)
+				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false);
+				CVar(PathInSetup, "Path in setup time", false);
+				CVarEnum(Draw, "Draw", 0b011, VISUAL | DROPDOWN_MULTI, nullptr,
+					VA_LIST("Path", "Areas", "Blacklisted zones"), Path = 1 << 0, Area = 1 << 1, Blacklist = 1 << 2);
+				CVarEnum(LookAtPath, "Look at path", 0, NONE, nullptr,
+					VA_LIST("Off", "Plain", "Silent", "Legit", "Legit silent"), Off, Plain, Silent, Legit, LegitSilent);
+				CVar(StickyIgnoreTime, "Sticky ignore time", 15, SLIDER_MIN, 15, 100, 5, "%is");
+				CVar(StuckDetectTime, "Stuck detect time", 0.6f, SLIDER_MIN, 0.1f, 5.f, 0.05f, "%gs");
+				CVar(StuckBlacklistTime, "Stuck blacklist time", 6, SLIDER_MIN, 1, 60, 1, "%is");
+				CVar(StuckExpireTime, "Stuck expire time", 20, SLIDER_MIN, 1, 300, 1, "%is");
+				CVar(StuckTime, "Stuck time", 0.2f, SLIDER_MIN, 0.1f, 0.9f, 0.05f, "%gs");
+				CVar(OffPathRepath, "Off-path repath", false, NOSAVE | DEBUGVAR);
+				CVar(VischeckEnabled, "Vischeck enabled", true);
+				CVar(VischeckTime, "Vischeck time", 2.f, SLIDER_MIN, 0.5f, 3.f, 0.5f, "%gs");
+				CVar(VischeckCacheTime, "Vischeck cache time", 45, SLIDER_MIN, 10, 500, 10, "%is");
+			NAMESPACE_END(NavEngine)
+
+			NAMESPACE_BEGIN(BotUtils)
+				CVar(LookAtPathSpeed, "Look at path speed", 25, SLIDER_CLAMP, 0, 120);
+				CVarEnum(WeaponSlot, "Force weapon", 0, NONE, nullptr,
+					VA_LIST("Off", "Best", "Primary", "Secondary", "Melee", "PDA"), Off, Best, Primary, Secondary, Melee, PDA);
+				CVarEnum(AutoScope, "Auto scope", 0, NONE, nullptr,
+					VA_LIST("Off", "Simple", "MoveSim"), Off, Simple, MoveSim);
+				CVar(AutoScopeCancelTime, "Auto scope cancel time", 3, SLIDER_MIN, 1, 5, 1, "%is");
+				CVar(AutoScopeUseCachedResults, "Auto scope use cached results", true, NOSAVE | DEBUGVAR);
+				CVar(AutoHeatmakerFocus, "Auto heatmaker focus", false);
+				CVar(LookAtPathDebug, "Look at path debug", false, NOSAVE | DEBUGVAR);
+			NAMESPACE_END(BotUtils)
+
+			NAMESPACE_BEGIN(NavBot)
+				CVar(Enabled, VA_LIST("Enabled", "Navbot enabled"), false);
+				CVarEnum(Blacklist, "Blacklist", 0b0111111, DROPDOWN_MULTI, "None",
+					VA_LIST("Normal threats", "Dormant threats", "##Divider", "Players", "Stickies", "Projectiles (reactive only)", "Sentries"),
+					NormalThreats = 1 << 0, DormantThreats = 1 << 1, Players = 1 << 2, Stickies = 1 << 3, Projectiles = 1 << 4, Sentries = 1 << 5);
+				CVar(BlacklistDelay, "Blacklist normal scan delay", 0.5f, SLIDER_MIN, 0.1f, 1.f, 0.1f, "%gs");
+				CVar(BlacklistDormantDelay, "Blacklist dormant scan delay", 1.f, SLIDER_MIN, 0.5f, 5.f, 0.5f, "%gs");
+				CVar(BlacklistSlightDangerLimit, "Blacklist slight danger limit", 2, SLIDER_MIN, 1, 10);
+				CVar(SmartJump, "Smart jump", true);
+				CVar(EscapeSpawn, "Escape spawn", true);
+				CVarEnum(RechargeDT, "Recharge DT", 0, NONE, nullptr,
+					VA_LIST("Off", "On", "If not fakelagging"), Off, Always, WaitForFL);
+				CVar(RechargeDTDelay, "Recharge DT delay", 5, SLIDER_MIN, 0, 10, 1, "%is");
+				CVarEnum(Preferences, "Preferences", 0b100001111110111, DROPDOWN_MULTI, nullptr,
+					VA_LIST("Get health", "Get ammo", "Reload weapons", "Stalk enemies", "Defend objectives", "Capture objectives", "Help capture objectives", "Escape danger", "Safe capping", "Target sentries (attack only)", "Auto engie", "##Divider", "Target sentries low range", "Help capture objective friend only", "Dont escape danger with intel", "Group with others", "MvM Sniper (overrides other jobs)"),
+					SearchHealth = 1 << 0, SearchAmmo = 1 << 1, ReloadWeapons = 1 << 2, StalkEnemies = 1 << 3, DefendObjectives = 1 << 4, CaptureObjectives = 1 << 5, HelpCaptureObjectives = 1 << 6, EscapeDanger = 1 << 7, SafeCapping = 1 << 8, TargetSentries = 1 << 9, AutoEngie = 1 << 10, TargetSentriesLowRange = 1 << 11, HelpFriendlyCaptureObjectives = 1 << 12, DontEscapeDangerIntel = 1 << 13, GroupWithOthers = 1 << 14, MVMSniper = 1 << 15);
+				CVarEnum(Personality, "Personality", 1, NONE, nullptr, VA_LIST("Yolo", "Balanced", "Cautious"), Yolo, Balanced, Cautious);
+				CVar(MeleeTargetRange, "Melee target range", 600, NONE, 150, 4000, 50);
+				CVar(DangerOverlay, "Danger overlay", false);
+				CVar(DangerOverlayMaxDist, "Danger overlay max distance", 2000.f, SLIDER_MIN, 500.f, 6000.f, 250.f, "%0.0f");
+				CVar(StickyDangerRange, "Sticky danger range", 600, NOSAVE | DEBUGVAR, 50, 1500, 50);
+				CVar(ProjectileDangerRange, "Projectile danger range", 600, NOSAVE | DEBUGVAR, 50, 1500, 50);
+			NAMESPACE_END(NavBot)
+
+			NAMESPACE_BEGIN(FollowBot)
+				CVar(Enabled, VA_LIST("Enabled", "Followbot enabled"), false);
+				CVarEnum(UseNav, "Use nav mesh on", 0, NONE, nullptr, VA_LIST("Off", "Normal", "Normal + Dormant"), Off, Normal, Dormant);
+				CVarEnum(Targets, "Targets", 0b01, DROPDOWN_MULTI, nullptr, VA_LIST("Teammates", "Enemies"), Teammates = 1 << 0, Enemies = 1 << 1);
+				CVarEnum(Prefer, "Prefer", 0, NONE, nullptr, VA_LIST("Off", "Prefer friends", "Party members"), Off, PreferFriends, PartyMembers);
+				CVarEnum(LookAtPath, "Look at path", 0, NONE, nullptr, VA_LIST("Off", "Plain", "Silent"), Off, Plain, Silent);
+				CVarEnum(LookAtPathMode, "Look at path mode", 0, NONE, nullptr, VA_LIST("Path", "Copy target", "Copy target immediate", "At target"), Path, Copy, CopyImmediate, AtTarget);
+				CVar(LookAtPathNoSnap, "Avoid view snap", false);
+				CVar(DrawPath, "Draw path nodes", false);
+				CVar(MinPriority, "Min follow priority", 0, SLIDER_CLAMP, 0, 10);
+				CVar(MaxNodes, "Max path nodes", 300, SLIDER_CLAMP, 50, 500);
+				CVar(ActivationDistance, "Activation distance", 300, SLIDER_CLAMP, 10, 1200);
+				CVar(FollowDistance, "Follow distance", 60, SLIDER_CLAMP, 10, 150);
+				CVar(AbandonDistance, "Abandon distance", 1500, SLIDER_CLAMP, 250, 1500);
+				CVar(NavAbandonDistance, "Nav abandon distance", 1500, SLIDER_CLAMP, 2000, 8000);
+			NAMESPACE_END(FollowBot)
+
 			CVar(AutoRocketJumpChokeGrounded, "Choke grounded", 1, NOSAVE | DEBUGVAR, 0, 3);
 			CVar(AutoRocketJumpChokeAir, "Choke air", 1, NOSAVE | DEBUGVAR, 0, 3);
 			CVar(AutoRocketJumpSkipGround, "Skip grounded", 0, NOSAVE | DEBUGVAR, 0, 3);
@@ -735,16 +813,73 @@ NAMESPACE_BEGIN(Vars)
 		NAMESPACE_END(Movement)
 
 		NAMESPACE_BEGIN(Automation)
+			CVar(NamedPipe, "Named pipe", false);
 			CVarEnum(AntiBackstab, "Anti-backstab", 0, NONE, nullptr,
 				VA_LIST("Off", "Yaw", "Pitch", "Fake"),
 				Off, Yaw, Pitch, Fake);
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
 			CVar(AntiAutobalance, "Anti-autobalance", false);
+			CVarEnum(AntiAutobalanceMode, "Retry method", 3, NONE, nullptr,
+				VA_LIST("Off", "On death", "On prompt", "Both"),
+				Off, OnDeath, OnPrompt, Both);
 			CVar(AntiAFK, "Anti-AFK", false);
 			CVar(AutoF2Ignored, "Auto F2 ignored", false);
 			CVar(AutoF1Priority, "Auto F1 priority", false);
+			CVarEnum(AutoVote, "Auto vote", 0b0, DROPDOWN_MULTI, "Off",
+				VA_LIST("Defend", "Assist", "Kick", "##Divider", "Kick all", "Wait for cooldown"),
+				Defend = 1 << 0, Assist = 1 << 1, Kick = 1 << 2, KickAll = 1 << 3, Cooldown = 1 << 4);
+			CVar(AutoVoteDelay, "Random vote delay", false);
+			CVar(AutoVoteDelayInterval, "Delay interval", FloatRange_t(1.f, 6.5f), SLIDER_MIN, 1.f, 6.5f, 0.5f, "%0.1fs - %0.1fs");
+			CVar(AutoVoteMap, "Auto vote map", true);
+			CVar(AutoVoteMapOption, "", 2, SLIDER_CLAMP, 0, 2, 1, "%i");
+			CVar(AutoRetry, "Auto retry", false);
+			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
+			CVar(AutoDisguise, "Auto disguise", false);
+			CVar(AutoTaunt, "Auto taunt on kill", false);
+			CVar(AutoTauntChance, "Auto taunt chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+			CVar(AutoTauntSlot, "Auto taunt slot", 0, SLIDER_CLAMP, 0, 8);
+			CVar(AchievementSpam, "Achievement spam", false);
+			CVar(AchievementSpamID, "Achievement spam id", 2332);
+			CVar(Micspam, "Micspam", false);
+			CVar(NoiseSpam, "Noise spam", false);
+			CVar(CallVoteSpam, "Callvote spam", false);
+			CVar(AutoReport, "Auto report players", false);
+			NAMESPACE_BEGIN(ChatSpam)
+				CVar(Enable, "Chat spam", false);
+				CVar(Interval, "Interval", 3.0f, SLIDER_CLAMP | SLIDER_PRECISION, 0.5f, 10.0f, 0.5f, "%0.1fs");
+				CVar(TeamChat, "Team chat", false);
+				CVar(Randomize, "Randomize", false);
+				CVar(AutoReply, "Auto reply", false);
+				CVar(VoteKickReply, "Vote kick reply", false);
+			NAMESPACE_END(ChatSpam)
+			NAMESPACE_BEGIN(KillSay)
+				CVar(Enable, "Kill say", false);
+				CVar(Chance, "Kill say chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+				CVar(TeamChat, "Team chat", false);
+			NAMESPACE_END(KillSay)
+			NAMESPACE_BEGIN(AutoItem)
+				CVarEnum(Enable, "Enable", 0b0, DROPDOWN_MULTI, nullptr,
+					VA_LIST("Weapons", "Hats", "Noisemaker"),
+					Weapons = 1 << 0, Hats = 1 << 1, Noisemaker = 1 << 2);
+				CVar(Interval, "Interval", 30, SLIDER_CLAMP, 2, 60, 1, "%is");
+				CVar(Primary, "Weapon primary", std::string("-1"));
+				CVar(Secondary, "Weapon secondary", std::string("-1"));
+				CVar(Melee, "Weapon melee", std::string("-1"));
+				CVar(FirstHat, "Hat 1", 940);
+				CVar(SecondHat, "Hat 2", 941);
+				CVar(ThirdHat, "Hat 3", 302);
+			NAMESPACE_END(AutoItem)
 			CVar(AcceptItemDrops, "Auto accept item drops", false);
+			CVar(RandomClass, "Random class", false);
+			CVarEnum(RandomClassExclude, "Random class exclude", 0, DROPDOWN_MULTI, "None",
+				VA_LIST("Scout", "Sniper", "Soldier", "Demoman", "Medic", "Heavy", "Pyro", "Spy", "Engineer"),
+				Scout = 1 << 0, Sniper = 1 << 1, Soldier = 1 << 2, Demoman = 1 << 3, Medic = 1 << 4, Heavy = 1 << 5, Pyro = 1 << 6, Spy = 1 << 7, Engineer = 1 << 8);
+			CVar(RandomClassInterval, "Random class interval", FloatRange_t(3.f, 5.f), SLIDER_MIN | SLIDER_PRECISION, 0.5f, 30.f, 0.5f, "%g - %gm");
+			CVar(ForceClass, "Autojoin class", 0);
+			CVarEnum(VoiceCommandSpam, "Voice command spam", 0, NONE, nullptr,
+				VA_LIST("Off", "Random", "Medic", "Thanks", "Nice Shot", "Cheers", "Jeers", "Go Go Go", "Move Up", "Go Left", "Go Right", "Yes", "No", "Incoming", "Spy", "Sentry Ahead", "Need Teleporter", "Pootis", "Need Sentry", "Activate Charge", "Help", "Battle Cry", "Good Job"),
+				Off, Random, Medic, Thanks, NiceShot, Cheers, Jeers, GoGoGo, MoveUp, GoLeft, GoRight, Yes, No, Incoming, Spy, Sentry, NeedTeleporter, Pootis, NeedSentry, ActivateCharge, Help, BattleCry, GoodJob);
 		NAMESPACE_END(Automation)
 
 		NAMESPACE_BEGIN(Exploits)
@@ -807,6 +942,24 @@ NAMESPACE_BEGIN(Vars)
 			);
 			CVar(ExtendQueue, "Extend queue", false);
 			CVar(AutoCasualQueue, "Auto casual queue", false);
+			CVar(AutoCasualJoin, "Auto casual join", false);
+			CVar(AutoCompetitiveQueue, "Auto competitive queue", false);
+			CVar(AutoMannUpQueue, "Auto MannUp queue", false);
+			CVar(AutoBootCampQueue, "Auto BootCamp queue", false);
+			CVar(MannUpTourIndex, "MannUp tour", 0);
+			CVar(MannUpUncompleted, "Only uncompleted missions", false);
+			CVar(BootcampMissionBits, "BootCamp missions", 0);
+			CVar(QueueDelay, "Queue delay", 5, SLIDER_MIN, 0, 10, 1, "%im");
+			CVar(AutoAbandonIfNoNavmesh, "Auto abandon if no navmesh", false);
+			CVar(AutoDumpProfiles, "Auto dump profiles", false);
+			CVar(AutoDumpDelay, "Auto dump delay", 15, SLIDER_CLAMP, 0, 120, 1, "%is");
+			CVar(RQif, "Requeue if...", false);
+			CVar(RQplt, "Players LT", 12, SLIDER_MIN, 0, 100, 1, "%i");
+			CVar(RQpgt, "Players GT", 0, SLIDER_MIN, 0, 100, 1, "%i");
+			CVar(RQkick, "Kicked", false);
+			CVar(RQLTM, "dont RQLTM", false);
+			CVar(RQIgnoreFriends, "Ignore Friends", false);
+			CVar(RQnoAbandon, "RQ w/o abandon", false);
 		NAMESPACE_END(Queueing)
 
 		NAMESPACE_BEGIN(MannVsMachine, Mann vs. Machine)

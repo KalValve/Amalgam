@@ -206,6 +206,77 @@ int CPlayerlistUtils::GetPriority(int iIndex, bool bCache)
 	return GetPriority(GetAccountID(iIndex));
 }
 
+int CPlayerlistUtils::GetFollowPriority(uint32_t uAccountID, bool bCache)
+{
+	(void)bCache; // Follow priorities are stored in the playerlist tags, not the entity cache.
+	const int iDefault = m_vTags[TagToIndex(DEFAULT_TAG)].m_iFollowPriority;
+	if (!uAccountID)
+		return iDefault;
+
+	std::vector<int> vPriorities;
+	if (auto it = m_mPlayerTags.find(uAccountID); it != m_mPlayerTags.end())
+	{
+		for (const int iID : it->second)
+		{
+			auto pTag = GetTag(iID);
+			if (!pTag || pTag->m_bLabel)
+				continue;
+			if (pTag->m_iFollowPriority < 0)
+				return pTag->m_iFollowPriority;
+			vPriorities.push_back(pTag->m_iFollowPriority);
+		}
+	}
+
+	if (H::Entities.IsFriend(uAccountID))
+		vPriorities.push_back(m_vTags[TagToIndex(FRIEND_TAG)].m_iFollowPriority);
+	if (H::Entities.InParty(uAccountID))
+		vPriorities.push_back(m_vTags[TagToIndex(PARTY_TAG)].m_iFollowPriority);
+
+	if (vPriorities.empty())
+		return iDefault;
+	return *std::max_element(vPriorities.begin(), vPriorities.end());
+}
+
+int CPlayerlistUtils::GetFollowPriority(int iIndex, bool bCache)
+{
+	return GetFollowPriority(GetAccountID(iIndex), bCache);
+}
+
+int CPlayerlistUtils::GetVotePriority(uint32_t uAccountID)
+{
+	const int iDefault = m_vTags[TagToIndex(DEFAULT_TAG)].m_iVotePriority;
+	if (!uAccountID)
+		return iDefault;
+
+	std::vector<int> vPriorities;
+	if (auto it = m_mPlayerTags.find(uAccountID); it != m_mPlayerTags.end())
+	{
+		for (const int iID : it->second)
+		{
+			auto pTag = GetTag(iID);
+			if (!pTag || pTag->m_bLabel)
+				continue;
+			if (pTag->m_iVotePriority < 0)
+				return pTag->m_iVotePriority;
+			vPriorities.push_back(pTag->m_iVotePriority);
+		}
+	}
+
+	if (H::Entities.IsFriend(uAccountID))
+		vPriorities.push_back(m_vTags[TagToIndex(FRIEND_TAG)].m_iVotePriority);
+	if (H::Entities.InParty(uAccountID))
+		vPriorities.push_back(m_vTags[TagToIndex(PARTY_TAG)].m_iVotePriority);
+
+	if (vPriorities.empty())
+		return iDefault;
+	return *std::max_element(vPriorities.begin(), vPriorities.end());
+}
+
+int CPlayerlistUtils::GetVotePriority(int iIndex)
+{
+	return GetVotePriority(GetAccountID(iIndex));
+}
+
 PriorityLabel_t* CPlayerlistUtils::GetSignificantTag(uint32_t uAccountID, int iMode)
 {
 	if (!uAccountID)

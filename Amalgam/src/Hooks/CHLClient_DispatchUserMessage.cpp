@@ -23,11 +23,45 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 
 	switch (type)
 	{
-	case VoteStart:
-		F::Output.UserMessage(msgData);
-		F::AutoVote.UserMessage(msgData);
-
+	case VotePass:
+	case VoteFailed:
+	{
+		msgData.SeekRelative(4);
+		const int iVoteID = msgData.ReadLong();
+		F::AutoVote.OnVoteEnd(iVoteID);
 		break;
+	}
+	case CallVoteFailed:
+	{
+		if (Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Kick)
+		{
+			const int iReason = msgData.ReadByte();
+			if (iReason == VOTE_FAILED_ON_COOLDOWN || iReason == VOTE_FAILED_RATE_EXCEEDED)
+				F::AutoVote.OnCallVoteFail(msgData.ReadShort());
+			msgData.Seek(0);
+		}
+		break;
+	}
+	case VoteStart:
+	{
+		const int iTeam = msgData.ReadByte();
+		const int iVoteID = msgData.ReadLong();
+		const int iCaller = msgData.ReadByte();
+		char sReason[256]; msgData.ReadString(sReason, sizeof(sReason));
+		char sTarget[256]; msgData.ReadString(sTarget, sizeof(sTarget));
+		const int iTarget = msgData.ReadByte() >> 1;
+		msgData.Seek(0);
+
+		F::Output.UserMessage(msgData);
+		if (std::string(sReason).find("kick") != std::string::npos)
+		{
+			F::AutoVote.OnVoteStart(iTeam, iVoteID, iCaller, iTarget);
+			F::Misc.OnVoteStart(iCaller, iTarget, sTarget);
+		}
+		if (!Vars::Misc::Automation::AutoVote.Value)
+			F::AutoVote.UserMessage(msgData);
+		break;
+	}
 	case VoiceSubtitle:
 	{
 		int iEntityID = msgData.ReadByte();
@@ -36,6 +70,16 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 		if (iVoiceMenu == 1 && iCommandID == 6)
 			F::AutoHeal.m_mMedicCallers[iEntityID];
 
+		break;
+	}
+	case SayText2:
+	{
+		const int iEntityID = msgData.ReadByte();
+		msgData.ReadByte();
+		char sMessageName[256]{}; msgData.ReadString(sMessageName, sizeof(sMessageName));
+		char sName[256]{}; msgData.ReadString(sName, sizeof(sName));
+		char sMessage[256]{}; msgData.ReadString(sMessage, sizeof(sMessage));
+		F::Misc.OnChatMessage(iEntityID, sName, sMessage);
 		break;
 	}
 	case TextMsg:
@@ -97,9 +141,20 @@ MAKE_HOOK(CHLClient_DispatchUserMessage, U::Memory.GetVirtual(I::Client, 36), bo
 			}
 #endif
 
-			if (Vars::Misc::Automation::AntiAutobalance.Value
-				&& FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending") && !I::EngineClient->IsPlayingDemo())
-				I::EngineClient->ClientCmd_Unrestricted("retry");
+			if (FNV1A::Hash32(sMsg.c_str()) == FNV1A::Hash32Const("#TF_Autobalance_TeamChangePending")
+				&& Vars::Misc::Automation::AntiAutobalance.Value
+				&& Vars::Misc::Automation::AntiAutobalanceMode.Value != Vars::Misc::Automation::AntiAutobalanceModeEnum::Off
+				&& !I::EngineClient->IsPlayingDemo())
+			{
+				const int iMode = Vars::Misc::Automation::AntiAutobalanceMode.Value;
+				if (iMode == Vars::Misc::Automation::AntiAutobalanceModeEnum::OnDeath
+					|| iMode == Vars::Misc::Automation::AntiAutobalanceModeEnum::Both)
+					F::Misc.SetAutoBalanceTeamChangePending(true);
+
+				if (iMode == Vars::Misc::Automation::AntiAutobalanceModeEnum::OnPrompt
+					|| iMode == Vars::Misc::Automation::AntiAutobalanceModeEnum::Both)
+					I::EngineClient->ClientCmd_Unrestricted("retry");
+			}
 		}
 		break;
 	}

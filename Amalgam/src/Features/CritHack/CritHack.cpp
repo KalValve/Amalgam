@@ -301,7 +301,7 @@ int CCritHack::GetCritRequest(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* 
 {
 	bool bCanCrit = m_iAvailableCrits > 0 && !m_bCritBanned;
 
-	bool bForce = bCanCrit && Vars::CritHack::ForceCrits.Value;
+	bool bForce = bCanCrit && (Vars::CritHack::ForceCrits.Value || m_bForce);
 	if (bCanCrit && m_bMelee && Vars::CritHack::AlwaysMeleeCrit.Value
 		&& (Vars::Aimbot::General::AutoShoot.Value ? pCmd->buttons & IN_ATTACK && !(G::OriginalCmd.buttons & IN_ATTACK) : Vars::Aimbot::General::AimType.Value)
 		&& G::AimTarget.m_iEntIndex)

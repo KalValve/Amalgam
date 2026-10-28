@@ -14,6 +14,13 @@
 #include "../Features/Visuals/FakeAngle/FakeAngle.h"
 #include "../Features/Spectate/Spectate.h"
 #include "../Features/AntiCheatCompatibility/AntiCheatCompatibility.h"
+#include "../Features/Misc/AutoVote/AutoVote.h"
+#include "../Features/AutoJoin/AutoJoin.h"
+#include "../Features/NavBot/Objectives.h"
+#include "../Features/NavBot/BotUtils.h"
+#include "../Features/NavBot/NavBotCore.h"
+#include "../Features/NavBot/NavEngine.h"
+#include "../Features/FollowBot/FollowBot.h"
 
 static no_inline void UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 {
@@ -21,6 +28,28 @@ static no_inline void UpdateInfo(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUse
 	G::LastUserCmd = G::CurrentUserCmd ? G::CurrentUserCmd : pCmd;
 	G::CurrentUserCmd = pCmd;
 	G::OriginalCmd = *pCmd;
+
+	for (int iSlot = SLOT_PRIMARY; iSlot <= SLOT_MELEE; ++iSlot)
+	{
+		auto pSlotWeapon = pLocal->GetWeaponFromSlot(iSlot);
+		G::HasWeaponForSlot[iSlot] = pSlotWeapon != nullptr;
+		G::SavedDefIndexes[iSlot] = pSlotWeapon ? pSlotWeapon->m_iItemDefinitionIndex() : -1;
+		G::SavedWepIds[iSlot] = pSlotWeapon ? pSlotWeapon->GetWeaponID() : -1;
+		G::SavedWepSlots[iSlot] = pSlotWeapon ? iSlot : -1;
+		if (iSlot <= SLOT_SECONDARY)
+		{
+			auto& tAmmo = G::AmmoInSlot[iSlot];
+			tAmmo = {};
+			if (pSlotWeapon)
+			{
+				tAmmo.m_iClip = pSlotWeapon->m_iClip1();
+				tAmmo.m_iMaxClip = pSlotWeapon->GetMaxClip1();
+				tAmmo.m_iReserve = pLocal->GetAmmoCount(pSlotWeapon->m_iPrimaryAmmoType());
+				tAmmo.m_iMaxReserve = pLocal->GetMaxAmmo(pSlotWeapon->m_iPrimaryAmmoType());
+				tAmmo.m_bUsesAmmo = !SDK::WeaponDoesNotUseAmmo(pSlotWeapon);
+			}
+		}
+	}
 
 	if (!pWeapon)
 		return;
@@ -40,8 +69,29 @@ MAKE_HOOK(CHLClient_CreateMove, U::Memory.GetVirtual(I::Client, 21), void,
 
 	auto pLocal = H::Entities.GetLocal();
 	auto pWeapon = H::Entities.GetWeapon();
+	static bool sLoggedCreateMove = false;
+	if (!sLoggedCreateMove)
+	{
+		SDK::BotDiagnostic("BotRuntime", "CHLClient_CreateMove hook reached");
+		sLoggedCreateMove = true;
+	}
+	static std::string sLastBotSettings = {};
+	const auto sBotSettings = std::format("settings: AutoJoin class={}, random={}; NavEngine={}, NavBot={}, FollowBot={}, FollowBot targets={}; local player={}",
+		Vars::Misc::Automation::ForceClass.Value,
+		Vars::Misc::Automation::RandomClass.Value,
+		Vars::Misc::Movement::NavEngine::Enabled.Value,
+		Vars::Misc::Movement::NavBot::Enabled.Value,
+		Vars::Misc::Movement::FollowBot::Enabled.Value,
+		Vars::Misc::Movement::FollowBot::Targets.Value,
+		pLocal != nullptr);
+	if (sBotSettings != sLastBotSettings)
+	{
+		SDK::BotDiagnostic("BotRuntime", sBotSettings);
+		sLastBotSettings = sBotSettings;
+	}
 	if (!pLocal)
 		return;
+	F::AutoVote.Run(pLocal);
 
 	bool* pSendPacket = reinterpret_cast<bool*>(uintptr_t(_AddressOfReturnAddress()) + 0x20);
 	CUserCmd* pCmd = &I::Input->m_pCommands[sequence_number % MULTIPLAYER_BACKUP];
@@ -52,9 +102,16 @@ MAKE_HOOK(CHLClient_CreateMove, U::Memory.GetVirtual(I::Client, 21), void,
 		F::Spectate.CreateMove(pCmd);
 		F::Backtrack.CreateMove(pCmd);
 		F::Misc.RunPre(pLocal, pCmd);
+	F::AutoJoin.Run(pLocal);
+	F::GameObjectiveController.Update();
+	F::BotUtils.Run(pLocal, pWeapon, pCmd);
 	F::Ticks.Start(pLocal, pCmd);
 		F::Aimbot.Run(pLocal, pWeapon, pCmd);
 	F::Ticks.End(pLocal, pCmd);
+	F::FollowBot.Run(pLocal, pCmd);
+	F::NavBotCore.Run(pLocal, pWeapon, pCmd);
+	F::NavEngine.Run(pLocal, pWeapon, pCmd);
+	F::BotUtils.HandleSmartJump(pLocal, pCmd);
 		F::CritHack.Run(pLocal, pWeapon, pCmd);
 		F::NoSpread.Run(pLocal, pWeapon, pCmd);
 		F::Misc.RunPost(pLocal, pCmd);
