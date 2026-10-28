@@ -5,138 +5,1201 @@
 #include "../../Configs/Configs.h"
 #include "../../Binds/Binds.h"
 #include "../../Visuals/Groups/Groups.h"
+#include "Menu.h"
+
+#include "Components.h"
+#include "../Notifications/Notifications.h"
+#include "../../Configs/Configs.h"
+#include "../../Binds/Binds.h"
+#include "../../Visuals/Groups/Groups.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Spectate/Spectate.h"
 #include "../../Resolver/Resolver.h"
 #include "../../Visuals/Visuals.h"
 #include "../../Misc/Misc.h"
-#include "../../Misc/AutoQueue/AutoQueue.h"
 #include "../../Output/Output.h"
 #include "../../World/World.h"
 #include "../../Simulation/ProjectileSimulation/ProjectileSimulation.h"
-#include "../../AutoJoin/AutoJoin.h"
-#include "../../NavBot/NavEngine.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <numeric>
+#include <random>
+#include <string>
+#include <vector>
 
+// ------------------------------------------------------------
+// Layout constants (unscaled; always pass through H::Draw.Scale)
+// ------------------------------------------------------------
+namespace
+{
+	constexpr float kWidth = 800.0f;
+	constexpr float kHeight = 540.0f;
+	constexpr float kSidebar = 152.0f;
+	constexpr float kRounding = 18.0f;
+	constexpr float kHeaderNormal = 44.0f;
+	constexpr float kHeaderBind = 64.0f;
+
+	constexpr float kScenePeriodMin = 8.0f;
+	constexpr float kScenePeriodMax = 13.0f;
+	constexpr float kSceneCrossfade = 1.5f;
+
+	constexpr ImU32 kIceBlue = IM_COL32(181, 221, 250, 255);
+	constexpr float kPi = 3.14159265358979f;
+	constexpr float kTau = 6.28318530717959f;
+}
+
+// ------------------------------------------------------------
+// Premium menu animation helpers
+// ------------------------------------------------------------
+namespace PremiumMenu
+{
+	inline float Clamp01(float v) { return std::clamp(v, 0.0f, 1.0f); }
+
+	inline float Animate(float current, float target, float speed, float dt)
+	{
+		dt = std::clamp(dt, 0.0f, 0.1f);
+		return current + (target - current) * (1.0f - std::exp(-speed * dt));
+	}
+
+	inline float Smooth(float v) { v = Clamp01(v); return v * v * (3.0f - 2.0f * v); }
+
+	inline ImU32 Alpha(ImU32 color, float alpha)
+	{
+		const float old = static_cast<float>((color >> IM_COL32_A_SHIFT) & 0xFF);
+		const ImU32 a = static_cast<ImU32>(old * Clamp01(alpha) + 0.5f);
+		return (color & ~IM_COL32_A_MASK) | (a << IM_COL32_A_SHIFT);
+	}
+
+	inline ImVec4 ClampColor(ImVec4 c)
+	{
+		c.x = Clamp01(c.x); c.y = Clamp01(c.y); c.z = Clamp01(c.z); c.w = Clamp01(c.w);
+		return c;
+	}
+
+	inline float Wave(double time, double speed)
+	{
+		return static_cast<float>((std::sin(time * speed) + 1.0) * 0.5);
+	}
+
+	inline void AddRoundedGradientV(
+		ImDrawList* draw, ImVec2 a, ImVec2 b,
+		ImU32 top, ImU32 bottom,
+		float rounding, ImDrawFlags flags, float alpha)
+	{
+		const int start = draw->VtxBuffer.Size;
+		draw->AddRectFilled(a, b, IM_COL32(255, 255, 255, static_cast<int>(255.0f * Clamp01(alpha))),
+			rounding, flags);
+		ImGui::ShadeVertsLinearColorGradientKeepAlpha(
+			draw, start, draw->VtxBuffer.Size,
+			a, ImVec2(a.x, b.y), top, bottom);
+	}
+}
+
+// ------------------------------------------------------------
+// Globe ("internet") logo
+// ------------------------------------------------------------
+namespace
+{
+	void DrawGlobe(ImDrawList* draw, ImVec2 c, float r, double time,
+		ImU32 color, float alpha, float thickness)
+	{
+		if (alpha <= 0.01f) return;
+
+		draw->AddCircle(c, r, PremiumMenu::Alpha(color, alpha), 0, thickness);
+
+		for (int i = -2; i <= 2; ++i)
+		{
+			const float lat = static_cast<float>(i) * (kPi / 6.0f);
+			const float y = std::sin(lat) * r;
+			const float hw = std::cos(lat) * r;
+			draw->AddLine(
+				ImVec2(c.x - hw, c.y + y), ImVec2(c.x + hw, c.y + y),
+				PremiumMenu::Alpha(color, alpha * (i == 0 ? 0.9f : 0.55f)),
+				thickness * 0.8f);
+		}
+
+		const float rot = static_cast<float>(std::fmod(time * 0.55, static_cast<double>(kTau)));
+		constexpr int kMeridians = 12;
+		constexpr int kSteps = 16;
+		ImVec2 pts[kSteps + 1];
+
+		for (int k = 0; k < kMeridians; ++k)
+		{
+			const float lon = rot + static_cast<float>(k) * (kTau / kMeridians);
+			const float facing = std::cos(lon);
+			if (facing <= 0.0f) continue;
+
+			for (int s = 0; s <= kSteps; ++s)
+			{
+				const float lat = -kPi * 0.5f + kPi * static_cast<float>(s) / kSteps;
+				pts[s] = ImVec2(
+					c.x + r * std::cos(lat) * std::sin(lon),
+					c.y - r * std::sin(lat));
+			}
+
+			draw->AddPolyline(pts, kSteps + 1,
+				PremiumMenu::Alpha(color, alpha * (0.25f + 0.65f * facing)),
+				ImDrawFlags_None, thickness * 0.8f);
+		}
+
+		const float orbit = static_cast<float>(std::fmod(time * 1.3, static_cast<double>(kTau)));
+		const ImVec2 p(
+			c.x + (r + thickness * 2.0f) * std::cos(orbit),
+			c.y + (r + thickness * 2.0f) * std::sin(orbit) * 0.38f);
+		draw->AddCircleFilled(p, thickness * 1.3f, PremiumMenu::Alpha(color, alpha));
+	}
+}
+
+// ------------------------------------------------------------
+// Random background scenes (22 of them)
+// ------------------------------------------------------------
+namespace Scene
+{
+	constexpr int kCount = 22;
+
+	struct Ctx
+	{
+		ImDrawList* draw;
+		ImVec2 min, max;
+		double time;
+		uint32_t seed;
+		ImU32 color;
+		float alpha;
+	};
+
+	struct V3 { float x, y, z; };
+
+	inline V3 RotX(V3 p, float a)
+	{
+		const float c = std::cos(a), s = std::sin(a);
+		return { p.x, p.y * c - p.z * s, p.y * s + p.z * c };
+	}
+
+	inline V3 RotY(V3 p, float a)
+	{
+		const float c = std::cos(a), s = std::sin(a);
+		return { p.x * c + p.z * s, p.y, -p.x * s + p.z * c };
+	}
+
+	inline float Hash01(uint32_t seed, uint32_t i, uint32_t salt = 0)
+	{
+		uint32_t x = seed * 747796405u + i * 2891336453u + salt * 1664525u + 1013904223u;
+		x ^= x >> 16; x *= 2246822519u;
+		x ^= x >> 13; x *= 3266489917u;
+		x ^= x >> 16;
+		return static_cast<float>(x & 0xFFFFFFu) / static_cast<float>(0x1000000u);
+	}
+
+	inline float Frac(double v) { return static_cast<float>(v - std::floor(v)); }
+	inline float S(float v) { return H::Draw.Scale(v); }
+
+	inline ImU32 Rgb(int r, int g, int b, float a)
+	{
+		return PremiumMenu::Alpha(IM_COL32(r, g, b, 255), a);
+	}
+
+	inline ImVec2 Center(const Ctx& c)
+	{
+		return ImVec2((c.min.x + c.max.x) * 0.5f, (c.min.y + c.max.y) * 0.5f);
+	}
+
+	inline void Ellipse(ImDrawList* d, ImVec2 ctr, float rx, float ry, ImU32 col, float th, int seg = 28)
+	{
+		ImVec2 pts[64];
+		seg = std::min(seg, 64);
+		for (int i = 0; i < seg; ++i)
+		{
+			const float a = kTau * static_cast<float>(i) / static_cast<float>(seg);
+			pts[i] = ImVec2(ctr.x + std::cos(a) * rx, ctr.y + std::sin(a) * ry);
+		}
+		d->AddPolyline(pts, seg, col, ImDrawFlags_Closed, th);
+	}
+
+	// --- Scenes are the same as before ---
+	void Dots(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 36; ++i) {
+			const float speed = 0.015f + 0.035f * Hash01(c.seed, i, 2);
+			const float y = c.max.y - Frac(Hash01(c.seed, i, 1) + c.time * speed) * h;
+			const float x = c.min.x + Hash01(c.seed, i, 0) * w + static_cast<float>(std::sin(c.time * 0.5 + i)) * S(10.0f);
+			const float twinkle = PremiumMenu::Wave(c.time + i * 1.3, 1.0 + Hash01(c.seed, i, 4));
+			const float r = S(1.0f + 1.6f * Hash01(c.seed, i, 3));
+			c.draw->AddCircleFilled(ImVec2(x, y), r, PremiumMenu::Alpha(c.color, c.alpha * (0.15f + 0.55f * twinkle)));
+		}
+	}
+
+	void Bubbles(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 14; ++i) {
+			const float period = 7.0f + 7.0f * Hash01(c.seed, i, 2);
+			const float ph = Frac(Hash01(c.seed, i, 1) + c.time / period);
+			const float r = S(5.0f + 14.0f * Hash01(c.seed, i, 3)) * (0.55f + 0.45f * ph);
+			const float x = c.min.x + Hash01(c.seed, i, 0) * w + static_cast<float>(std::sin(c.time * 0.8 + i * 2.0)) * S(8.0f);
+			const float y = c.max.y + r - ph * (h + 2.0f * r);
+			const float a = c.alpha * std::sin(ph * kPi) * 0.7f;
+			c.draw->AddCircleFilled(ImVec2(x, y), r, PremiumMenu::Alpha(c.color, a * 0.12f));
+			c.draw->AddCircle(ImVec2(x, y), r, PremiumMenu::Alpha(c.color, a), 0, S(1.2f));
+			c.draw->AddCircleFilled(ImVec2(x - r * 0.35f, y - r * 0.35f), r * 0.18f, PremiumMenu::Alpha(c.color, a * 0.8f));
+		}
+	}
+
+	void Aurora(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const float step = S(6.0f);
+		const ImU32 colors[3] = { c.color, IM_COL32(80, 220, 200, 255), IM_COL32(170, 120, 255, 255) };
+		for (int b = 0; b < 3; ++b) {
+			const float bandH = h * 0.28f;
+			for (float x = c.min.x; x < c.max.x; x += step) {
+				const float t = (x - c.min.x) / w;
+				const float yc = c.min.y + h * (0.28f + 0.18f * b) + static_cast<float>(std::sin(t * 5.0 + c.time * (0.4 + 0.15 * b) + b * 2.0)) * h * 0.07f + static_cast<float>(std::sin(t * 11.0 - c.time * 0.3)) * h * 0.03f;
+				const float a = c.alpha * 0.45f * (0.6f + 0.4f * static_cast<float>(std::sin(t * 3.0 + c.time + b)));
+				const ImU32 clear = PremiumMenu::Alpha(colors[b], 0.0f);
+				const ImU32 solid = PremiumMenu::Alpha(colors[b], a);
+				c.draw->AddRectFilledMultiColor(ImVec2(x, yc - bandH * 0.5f), ImVec2(x + step + 1.0f, yc), clear, clear, solid, solid);
+				c.draw->AddRectFilledMultiColor(ImVec2(x, yc), ImVec2(x + step + 1.0f, yc + bandH), solid, solid, clear, clear);
+			}
+		}
+	}
+
+	void Constellation(const Ctx& c) {
+		constexpr int N = 24;
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		float xs[N], ys[N], fade[N];
+		for (int i = 0; i < N; ++i) {
+			const float vx = (Hash01(c.seed, i, 2) - 0.5f) * 0.03f;
+			const float vy = (Hash01(c.seed, i, 3) - 0.5f) * 0.03f;
+			const float px = Frac(Hash01(c.seed, i, 0) + c.time * vx);
+			const float py = Frac(Hash01(c.seed, i, 1) + c.time * vy);
+			xs[i] = c.min.x + px * w; ys[i] = c.min.y + py * h;
+			fade[i] = PremiumMenu::Clamp01(std::min(std::min(px, 1.0f - px), std::min(py, 1.0f - py)) / 0.06f);
+		}
+		const float maxDist = S(95.0f);
+		for (int i = 0; i < N; ++i) {
+			for (int j = i + 1; j < N; ++j) {
+				const float dx = xs[i] - xs[j], dy = ys[i] - ys[j];
+				const float d = std::sqrt(dx * dx + dy * dy);
+				if (d >= maxDist) continue;
+				const float a = c.alpha * (1.0f - d / maxDist) * 0.5f * std::min(fade[i], fade[j]);
+				c.draw->AddLine(ImVec2(xs[i], ys[i]), ImVec2(xs[j], ys[j]), PremiumMenu::Alpha(c.color, a), S(1.0f));
+			}
+		}
+		for (int i = 0; i < N; ++i) c.draw->AddCircleFilled(ImVec2(xs[i], ys[i]), S(1.8f), PremiumMenu::Alpha(c.color, c.alpha * 0.7f * fade[i]));
+	}
+
+	void Rings(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 4; ++i) {
+			const double tc = c.time / 3.4 + i * 0.25;
+			const uint32_t cycle = static_cast<uint32_t>(std::floor(tc));
+			const float ph = Frac(tc);
+			const ImVec2 center(c.min.x + Hash01(c.seed, i + cycle * 13u, 5) * w, c.min.y + Hash01(c.seed, i + cycle * 13u, 6) * h);
+			const float radius = ph * S(170.0f);
+			const float a = c.alpha * (1.0f - ph) * (1.0f - ph) * 0.7f;
+			c.draw->AddCircle(center, radius, PremiumMenu::Alpha(c.color, a), 48, S(1.4f));
+			c.draw->AddCircle(center, radius * 0.65f, PremiumMenu::Alpha(c.color, a * 0.5f), 40, S(1.0f));
+		}
+	}
+
+	void Streaks(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 30; ++i) {
+			const float speed = 0.25f + 0.45f * Hash01(c.seed, i, 1);
+			const float len = S(14.0f + 30.0f * Hash01(c.seed, i, 2));
+			const float y = c.min.y - len + Frac(Hash01(c.seed, i, 3) + c.time * speed) * (h + len);
+			const float x = c.min.x + Hash01(c.seed, i, 0) * w;
+			const float a = c.alpha * (0.2f + 0.5f * Hash01(c.seed, i, 4));
+			c.draw->AddLine(ImVec2(x, y), ImVec2(x - len * 0.35f, y - len), PremiumMenu::Alpha(c.color, a), S(1.2f));
+		}
+	}
+
+	void Earth(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const ImVec2 ctr(c.min.x + w * 0.5f, c.min.y + h * 0.52f);
+		const float r = std::min(w, h) * 0.34f;
+		for (uint32_t i = 0; i < 45; ++i) {
+			const float tw = PremiumMenu::Wave(c.time * (0.6 + Hash01(c.seed, i, 2)) + i, 1.0);
+			c.draw->AddCircleFilled(ImVec2(c.min.x + Hash01(c.seed, i, 0) * w, c.min.y + Hash01(c.seed, i, 1) * h), S(0.8f + 1.0f * Hash01(c.seed, i, 3)), Rgb(230, 240, 255, c.alpha * (0.1f + 0.5f * tw)));
+		}
+		const float moonA = static_cast<float>(c.time * 0.45);
+		const ImVec2 moonP(ctr.x + std::cos(moonA) * r * 1.55f, ctr.y + std::sin(moonA) * r * 0.40f - r * 0.10f);
+		const bool moonFront = std::sin(moonA) > 0.0f;
+		auto drawMoon = [&] { c.draw->AddCircleFilled(moonP, r * 0.13f, Rgb(210, 215, 225, c.alpha * 0.55f)); c.draw->AddCircle(moonP, r * 0.13f, Rgb(255, 255, 255, c.alpha * 0.35f), 0, S(1.0f)); };
+		if (!moonFront) drawMoon();
+		for (int k = 0; k < 4; ++k) c.draw->AddCircleFilled(ctr, r * (1.0f + 0.045f * (k + 1)), PremiumMenu::Alpha(c.color, c.alpha * 0.035f));
+		c.draw->AddCircleFilled(ctr, r, Rgb(8, 20, 40, c.alpha * 0.55f));
+		const float spin = static_cast<float>(c.time * 0.32);
+		const float tilt = 0.41f;
+		for (int li = -8; li <= 8; ++li) {
+			const float lat = static_cast<float>(li) * (10.0f * kPi / 180.0f);
+			const int n = std::max(6, static_cast<int>(40.0f * std::cos(lat)));
+			for (int k = 0; k < n; ++k) {
+				const float lon = kTau * static_cast<float>(k) / static_cast<float>(n);
+				const float landNoise = std::sin(lon * 2.0f + 1.0f) * std::cos(lat * 2.0f) + 0.7f * std::sin(lon * 3.3f - lat * 3.0f + 0.5f) + 0.5f * std::cos(lon * 5.0f + lat * 2.0f);
+				const bool land = landNoise > 0.55f;
+				V3 p{ std::cos(lat) * std::sin(lon), std::sin(lat), std::cos(lat) * std::cos(lon) };
+				p = RotX(RotY(p, spin), tilt);
+				if (p.z <= 0.02f) continue;
+				const float light = PremiumMenu::Clamp01(0.55f + p.z * 0.35f - p.x * 0.35f);
+				const float a = c.alpha * (land ? 0.95f : 0.38f) * light;
+				const float rad = S(land ? 1.7f : 1.1f) * (0.6f + 0.6f * p.z);
+				c.draw->AddCircleFilled(ImVec2(ctr.x + p.x * r, ctr.y - p.y * r), rad, land ? Rgb(110, 235, 150, a) : Rgb(70, 150, 255, a));
+			}
+		}
+		c.draw->AddCircle(ctr, r, PremiumMenu::Alpha(c.color, c.alpha * 0.55f), 0, S(1.2f));
+		c.draw->AddCircle(ctr, r * 1.05f, PremiumMenu::Alpha(c.color, c.alpha * 0.22f), 0, S(1.0f));
+		if (moonFront) drawMoon();
+	}
+
+	void Car(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const ImVec2 ctr(c.min.x + w * 0.5f, c.min.y + h * 0.58f);
+		const float scale = std::min(w, h * 1.5f) * 0.115f;
+		const float cam = 9.0f;
+		const float yaw = static_cast<float>(c.time * 0.55);
+		const float pitch = -0.30f;
+		auto proj = [&](float x, float y, float z, float yawAmt, float* k) -> ImVec2 {
+			const V3 p = RotX(RotY(V3{ x, y - 0.65f, z }, yawAmt), pitch);
+			const float kk = cam / (cam + p.z);
+			if (k) *k = kk;
+			return ImVec2(ctr.x + p.x * scale * kk, ctr.y - p.y * scale * kk);
+			};
+		auto depthAlpha = [](float k) { return std::clamp(0.35f + (k - 0.75f), 0.25f, 1.0f); };
+		auto edge = [&](float ax, float ay, float az, float bx, float by, float bz, float yawAmt, ImU32 col, float base, float th) {
+			float k0 = 1.0f, k1 = 1.0f;
+			const ImVec2 p0 = proj(ax, ay, az, yawAmt, &k0);
+			const ImVec2 p1 = proj(bx, by, bz, yawAmt, &k1);
+			c.draw->AddLine(p0, p1, PremiumMenu::Alpha(col, c.alpha * base * depthAlpha((k0 + k1) * 0.5f)), th);
+			};
+		for (int i = -5; i <= 5; ++i) {
+			const float g = static_cast<float>(i) * 1.2f;
+			const float a = 0.30f * (1.0f - std::abs(g) / 7.0f);
+			edge(g, 0.0f, -6.0f, g, 0.0f, 6.0f, 0.0f, c.color, a, S(1.0f));
+			edge(-6.0f, 0.0f, g, 6.0f, 0.0f, g, 0.0f, c.color, a, S(1.0f));
+		}
+		ImVec2 glow[28];
+		for (int i = 0; i < 28; ++i) {
+			const float a = kTau * static_cast<float>(i) / 28.0f;
+			glow[i] = proj(std::cos(a) * 2.7f, 0.0f, std::sin(a) * 2.7f, 0.0f, nullptr);
+		}
+		c.draw->AddConvexPolyFilled(glow, 28, PremiumMenu::Alpha(c.color, c.alpha * 0.12f));
+		c.draw->AddPolyline(glow, 28, PremiumMenu::Alpha(c.color, c.alpha * 0.45f), ImDrawFlags_Closed, S(1.2f));
+		static const float prof[8][2] = { { -2.0f, 0.30f },{ -2.0f, 0.80f },{ -1.1f, 0.85f },{ -0.7f, 1.25f },{ 0.5f, 1.25f },{ 1.0f, 0.85f },{ 2.0f, 0.75f },{ 2.0f, 0.30f } };
+		const float zs = 0.9f;
+		const ImU32 body = c.color;
+		for (int i = 0; i < 8; ++i) {
+			const int j = (i + 1) % 8;
+			edge(prof[i][0], prof[i][1], zs, prof[j][0], prof[j][1], zs, yaw, body, 0.9f, S(1.5f));
+			edge(prof[i][0], prof[i][1], -zs, prof[j][0], prof[j][1], -zs, yaw, body, 0.9f, S(1.5f));
+			edge(prof[i][0], prof[i][1], -zs, prof[i][0], prof[i][1], zs, yaw, body, 0.7f, S(1.2f));
+		}
+		const ImU32 wheelCol = IM_COL32(255, 90, 200, 255);
+		const float wheelX[2] = { -1.25f, 1.25f };
+		const float wheelZ[2] = { -0.95f, 0.95f };
+		const float rollA = static_cast<float>(c.time * 4.0);
+		for (int xi = 0; xi < 2; ++xi) {
+			for (int zi = 0; zi < 2; ++zi) {
+				const float cx = wheelX[xi], cz = wheelZ[zi], cy = 0.38f, wr = 0.38f;
+				constexpr int seg = 14;
+				for (int s = 0; s < seg; ++s) {
+					const float a0 = kTau * static_cast<float>(s) / seg;
+					const float a1 = kTau * static_cast<float>(s + 1) / seg;
+					edge(cx + std::cos(a0) * wr, cy + std::sin(a0) * wr, cz, cx + std::cos(a1) * wr, cy + std::sin(a1) * wr, cz, yaw, wheelCol, 0.95f, S(1.5f));
+				}
+				for (int sp = 0; sp < 3; ++sp) {
+					const float a = rollA + kTau * static_cast<float>(sp) / 3.0f;
+					edge(cx, cy, cz, cx + std::cos(a) * wr, cy + std::sin(a) * wr, cz, yaw, wheelCol, 0.7f, S(1.0f));
+				}
+			}
+		}
+		for (int side = -1; side <= 1; side += 2) {
+			float k = 1.0f;
+			const ImVec2 hl = proj(2.0f, 0.55f, 0.6f * static_cast<float>(side), yaw, &k);
+			c.draw->AddCircleFilled(hl, S(6.0f) * k, Rgb(255, 245, 200, c.alpha * 0.12f));
+			c.draw->AddCircleFilled(hl, S(2.5f) * k, Rgb(255, 245, 200, c.alpha * 0.95f));
+			const ImVec2 tl = proj(-2.0f, 0.60f, 0.6f * static_cast<float>(side), yaw, &k);
+			c.draw->AddCircleFilled(tl, S(5.0f) * k, Rgb(255, 60, 80, c.alpha * 0.14f));
+			c.draw->AddCircleFilled(tl, S(2.2f) * k, Rgb(255, 60, 80, c.alpha * 0.95f));
+		}
+	}
+
+	void Rain(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		c.draw->AddRectFilledMultiColor(ImVec2(c.min.x, c.max.y - h * 0.3f), c.max, Rgb(120, 160, 230, 0.0f), Rgb(120, 160, 230, 0.0f), Rgb(120, 160, 230, c.alpha * 0.10f), Rgb(120, 160, 230, c.alpha * 0.10f));
+		for (uint32_t i = 0; i < 90; ++i) {
+			const float speed = 0.9f + 0.9f * Hash01(c.seed, i, 1);
+			const float len = S(10.0f + 16.0f * Hash01(c.seed, i, 2));
+			const float y = c.min.y - len + Frac(Hash01(c.seed, i, 3) + c.time * speed) * (h + len);
+			const float x = c.min.x + Hash01(c.seed, i, 0) * w;
+			const float a = c.alpha * (0.25f + 0.35f * Hash01(c.seed, i, 4));
+			c.draw->AddLine(ImVec2(x, y), ImVec2(x - len * 0.18f, y - len), Rgb(170, 210, 255, a), S(1.0f));
+		}
+		for (uint32_t i = 0; i < 12; ++i) {
+			const double period = 1.6 + 1.2 * Hash01(c.seed, i, 5);
+			const double tc = c.time / period + Hash01(c.seed, i, 6);
+			const uint32_t cyc = static_cast<uint32_t>(std::floor(tc));
+			const float ph = Frac(tc);
+			const ImVec2 ctr(c.min.x + Hash01(c.seed, i + cyc * 19u, 7) * w, c.max.y - S(6.0f) - Hash01(c.seed, i + cyc * 19u, 8) * h * 0.22f);
+			const float rx = ph * S(26.0f);
+			Ellipse(c.draw, ctr, rx, rx * 0.32f, Rgb(190, 225, 255, c.alpha * (1.0f - ph) * (1.0f - ph) * 0.7f), S(1.0f), 24);
+		}
+	}
+
+	void BubbleRain(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 16; ++i) {
+			const double period = 6.0 + 4.0 * Hash01(c.seed, i, 2);
+			const double tc = c.time / period + Hash01(c.seed, i, 1);
+			const uint32_t cyc = static_cast<uint32_t>(std::floor(tc));
+			const float ph = Frac(tc);
+			const uint32_t key = i + cyc * 31u;
+			const float r = S(6.0f + 14.0f * Hash01(c.seed, key, 3));
+			const float x = c.min.x + Hash01(c.seed, key, 0) * w + static_cast<float>(std::sin(c.time * 0.9 + i * 1.7)) * S(10.0f);
+			const float popAt = 0.55f + 0.40f * Hash01(c.seed, key, 5);
+			const float popY = c.min.y + (0.25f + 0.65f * Hash01(c.seed, key, 6)) * h;
+			const float startY = c.min.y - r;
+			if (ph < popAt) {
+				const float q = ph / popAt;
+				const float y = startY + q * (popY - startY);
+				const float a = c.alpha * 0.7f * std::min(1.0f, q * 6.0f);
+				c.draw->AddCircleFilled(ImVec2(x, y), r, PremiumMenu::Alpha(c.color, a * 0.10f));
+				c.draw->AddCircle(ImVec2(x, y), r, PremiumMenu::Alpha(c.color, a), 0, S(1.2f));
+				c.draw->AddCircleFilled(ImVec2(x - r * 0.35f, y - r * 0.35f), r * 0.18f, Rgb(255, 255, 255, a * 0.8f));
+			}
+			else {
+				const float q = (ph - popAt) / (1.0f - popAt);
+				const float a = c.alpha * (1.0f - q) * 0.8f;
+				c.draw->AddCircle(ImVec2(x, popY), r * (1.0f + q * 1.8f), PremiumMenu::Alpha(c.color, a), 0, S(1.2f));
+				for (int d = 0; d < 7; ++d) {
+					const float ang = kTau * static_cast<float>(d) / 7.0f + Hash01(c.seed, key, 9) * 2.0f;
+					const float dist = r * (1.0f + q * 2.4f);
+					c.draw->AddCircleFilled(ImVec2(x + std::cos(ang) * dist, popY + std::sin(ang) * dist), S(1.6f) * (1.0f - q * 0.6f), PremiumMenu::Alpha(c.color, a));
+				}
+			}
+		}
+	}
+
+	void Warp(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const ImVec2 ctr = Center(c);
+		const float maxR = std::sqrt(w * w + h * h) * 0.5f;
+		for (uint32_t i = 0; i < 110; ++i) {
+			const float ang = Hash01(c.seed, i, 0) * kTau;
+			const float speed = 0.12f + 0.20f * Hash01(c.seed, i, 1);
+			const float z = Frac(Hash01(c.seed, i, 2) + c.time * speed);
+			const float zFar = std::max(0.0f, z - 0.07f);
+			const float d0 = z * z * z * maxR;
+			const float d1 = zFar * zFar * zFar * maxR;
+			const ImVec2 dir(std::cos(ang), std::sin(ang));
+			const float a = c.alpha * (0.2f + 0.8f * z);
+			const ImU32 col = Hash01(c.seed, i, 3) > 0.7f ? PremiumMenu::Alpha(c.color, a) : Rgb(230, 240, 255, a);
+			c.draw->AddLine(ImVec2(ctr.x + dir.x * d1, ctr.y + dir.y * d1), ImVec2(ctr.x + dir.x * d0, ctr.y + dir.y * d0), col, S(0.8f + 1.4f * z));
+		}
+	}
+
+	void Matrix(const Ctx& c) {
+		static const char kGlyphs[] = "0123456789ABCDEF<>+*=#";
+		constexpr int kGlyphCount = static_cast<int>(sizeof(kGlyphs)) - 1;
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const float colW = S(18.0f);
+		const float fontSize = S(11.0f);
+		const int cols = static_cast<int>(w / colW);
+		constexpr int trail = 9;
+		ImFont* font = ImGui::GetFont();
+		for (int col = 0; col < cols; ++col) {
+			const uint32_t uc = static_cast<uint32_t>(col);
+			const float speed = 0.10f + 0.22f * Hash01(c.seed, uc, 1);
+			const float headY = c.min.y + Frac(Hash01(c.seed, uc, 2) + c.time * speed) * (h + trail * fontSize);
+			const float x = c.min.x + colW * static_cast<float>(col) + colW * 0.2f;
+			for (int row = 0; row < trail; ++row) {
+				const float y = headY - static_cast<float>(row) * fontSize;
+				if (y < c.min.y - fontSize || y > c.max.y) continue;
+				const uint32_t tick = static_cast<uint32_t>(c.time * 5.0) + uc;
+				const int gi = static_cast<int>(Hash01(c.seed, uc * 131u + static_cast<uint32_t>(row), tick) * kGlyphCount) % kGlyphCount;
+				const char ch = kGlyphs[gi];
+				const float fade = 1.0f - static_cast<float>(row) / static_cast<float>(trail);
+				const ImU32 col32 = row == 0 ? Rgb(235, 255, 245, c.alpha * 0.9f) : PremiumMenu::Alpha(c.color, c.alpha * 0.6f * fade * fade);
+				c.draw->AddText(font, fontSize, ImVec2(x, y), col32, &ch, &ch + 1);
+			}
+		}
+	}
+
+	void Snow(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 60; ++i) {
+			const float speed = 0.04f + 0.10f * Hash01(c.seed, i, 1);
+			const float y = c.min.y + Frac(Hash01(c.seed, i, 2) + c.time * speed) * h;
+			const float x = c.min.x + Hash01(c.seed, i, 0) * w + static_cast<float>(std::sin(c.time * 0.8 + i)) * S(14.0f);
+			const float size = 1.0f + 2.2f * Hash01(c.seed, i, 3);
+			c.draw->AddCircleFilled(ImVec2(x, y), S(size), Rgb(235, 245, 255, c.alpha * (0.25f + 0.12f * size)));
+		}
+	}
+
+	void Fireflies(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t i = 0; i < 22; ++i) {
+			const float cx = c.min.x + Hash01(c.seed, i, 0) * w;
+			const float cy = c.min.y + Hash01(c.seed, i, 1) * h;
+			const float rx = S(30.0f + 60.0f * Hash01(c.seed, i, 2));
+			const float ry = S(20.0f + 45.0f * Hash01(c.seed, i, 3));
+			const ImVec2 p(cx + static_cast<float>(std::sin(c.time * (0.15 + 0.25 * Hash01(c.seed, i, 4)) + i)) * rx, cy + static_cast<float>(std::cos(c.time * (0.12 + 0.20 * Hash01(c.seed, i, 5)) + i * 1.7)) * ry);
+			float glow = PremiumMenu::Wave(c.time * (0.6 + Hash01(c.seed, i, 6)) + i * 2.1, 1.0);
+			glow *= glow;
+			const float r = S(1.8f + 1.2f * Hash01(c.seed, i, 7));
+			c.draw->AddCircleFilled(p, r * 5.0f, Rgb(190, 255, 120, c.alpha * 0.05f * glow));
+			c.draw->AddCircleFilled(p, r * 3.0f, Rgb(190, 255, 120, c.alpha * 0.10f * glow));
+			c.draw->AddCircleFilled(p, r, Rgb(220, 255, 150, c.alpha * (0.30f + 0.60f * glow)));
+		}
+	}
+
+	void Equalizer(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		constexpr int bars = 44;
+		const float bw = w / static_cast<float>(bars);
+		for (int i = 0; i < bars; ++i) {
+			const uint32_t ui = static_cast<uint32_t>(i);
+			const float f = (0.12f + 0.88f * std::abs(static_cast<float>(std::sin(c.time * (1.2 + 1.8 * Hash01(c.seed, ui, 1)) + Hash01(c.seed, ui, 2) * 6.3)))) * (0.55f + 0.45f * std::abs(static_cast<float>(std::sin(c.time * 0.7 + i * 0.35))));
+			const float bh = h * 0.42f * f;
+			const float x0 = c.min.x + static_cast<float>(i) * bw + bw * 0.18f;
+			const float x1 = c.min.x + static_cast<float>(i + 1) * bw - bw * 0.18f;
+			const ImU32 top = PremiumMenu::Alpha(c.color, c.alpha * 0.05f);
+			const ImU32 bottom = PremiumMenu::Alpha(c.color, c.alpha * 0.55f);
+			c.draw->AddRectFilledMultiColor(ImVec2(x0, c.max.y - bh), ImVec2(x1, c.max.y), top, top, bottom, bottom);
+			c.draw->AddRectFilled(ImVec2(x0, c.max.y - bh - S(3.0f)), ImVec2(x1, c.max.y - bh - S(1.5f)), Rgb(235, 250, 255, c.alpha * 0.6f));
+		}
+	}
+
+	void Radar(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const ImVec2 ctr = Center(c);
+		const float r = std::min(w, h) * 0.40f;
+		for (int i = 1; i <= 4; ++i) c.draw->AddCircle(ctr, r * static_cast<float>(i) / 4.0f, PremiumMenu::Alpha(c.color, c.alpha * 0.22f), 0, S(1.0f));
+		c.draw->AddLine(ImVec2(ctr.x - r, ctr.y), ImVec2(ctr.x + r, ctr.y), PremiumMenu::Alpha(c.color, c.alpha * 0.18f), S(1.0f));
+		c.draw->AddLine(ImVec2(ctr.x, ctr.y - r), ImVec2(ctr.x, ctr.y + r), PremiumMenu::Alpha(c.color, c.alpha * 0.18f), S(1.0f));
+		const float sweep = static_cast<float>(std::fmod(c.time * 1.2, static_cast<double>(kTau)));
+		constexpr int wedge = 22;
+		for (int k = 0; k < wedge; ++k) {
+			const float a0 = sweep - static_cast<float>(k) * 0.045f;
+			const float a1 = a0 - 0.045f;
+			const float f = 1.0f - static_cast<float>(k) / wedge;
+			c.draw->AddTriangleFilled(ctr, ImVec2(ctr.x + std::cos(a0) * r, ctr.y + std::sin(a0) * r), ImVec2(ctr.x + std::cos(a1) * r, ctr.y + std::sin(a1) * r), PremiumMenu::Alpha(c.color, c.alpha * 0.22f * f * std::sqrt(f)));
+		}
+		c.draw->AddLine(ctr, ImVec2(ctr.x + std::cos(sweep) * r, ctr.y + std::sin(sweep) * r), PremiumMenu::Alpha(c.color, c.alpha * 0.85f), S(1.5f));
+		for (uint32_t i = 0; i < 8; ++i) {
+			const float ang = Hash01(c.seed, i, 0) * kTau;
+			const float dist = r * (0.2f + 0.75f * Hash01(c.seed, i, 1));
+			const ImVec2 p(ctr.x + std::cos(ang) * dist, ctr.y + std::sin(ang) * dist);
+			float diff = std::fmod(sweep - ang, kTau);
+			if (diff < 0.0f) diff += kTau;
+			const float a = std::exp(-diff * 0.9f);
+			c.draw->AddCircleFilled(p, S(2.5f), Rgb(235, 255, 245, c.alpha * a));
+			c.draw->AddCircle(p, S(2.5f) + S(6.0f) * (1.0f - a), PremiumMenu::Alpha(c.color, c.alpha * a * 0.8f), 0, S(1.0f));
+		}
+	}
+
+	void Dna(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const float cy = c.min.y + h * 0.5f;
+		const float amp = h * 0.16f;
+		constexpr int steps = 90;
+		const ImU32 colA = c.color;
+		const ImU32 colB = IM_COL32(255, 100, 200, 255);
+		for (int i = 0; i < steps; ++i) {
+			const float t = static_cast<float>(i) / (steps - 1);
+			const float x = c.min.x + t * w;
+			const float phase = t * 10.0f + static_cast<float>(c.time * 1.4);
+			const float s = std::sin(phase), co = std::cos(phase);
+			if (i % 3 == 0) c.draw->AddLine(ImVec2(x, cy + s * amp), ImVec2(x, cy - s * amp), Rgb(235, 250, 255, c.alpha * 0.20f), S(1.0f));
+			const float zA = co, zB = -co;
+			c.draw->AddCircleFilled(ImVec2(x, cy + s * amp), S(2.0f + 1.6f * (zA * 0.5f + 0.5f)), PremiumMenu::Alpha(colA, c.alpha * (0.30f + 0.50f * (zA * 0.5f + 0.5f))));
+			c.draw->AddCircleFilled(ImVec2(x, cy - s * amp), S(2.0f + 1.6f * (zB * 0.5f + 0.5f)), PremiumMenu::Alpha(colB, c.alpha * (0.30f + 0.50f * (zB * 0.5f + 0.5f))));
+		}
+	}
+
+	void Tesseract(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const ImVec2 ctr = Center(c);
+		const float size = std::min(w, h) * 0.17f;
+		const float a = static_cast<float>(c.time * 0.45);
+		const float b = static_cast<float>(c.time * 0.31);
+		const float g = static_cast<float>(c.time * 0.20);
+		ImVec2 pt[16];
+		float dep[16];
+		for (int i = 0; i < 16; ++i) {
+			float x = (i & 1) ? 1.0f : -1.0f;
+			float y = (i & 2) ? 1.0f : -1.0f;
+			float z = (i & 4) ? 1.0f : -1.0f;
+			float q = (i & 8) ? 1.0f : -1.0f;
+			{ const float cs = std::cos(a), sn = std::sin(a); const float nx = x * cs - q * sn; const float nq = x * sn + q * cs; x = nx; q = nq; }
+			{ const float cs = std::cos(b), sn = std::sin(b); const float nz = z * cs - q * sn; const float nq = z * sn + q * cs; z = nz; q = nq; }
+			{ const float cs = std::cos(g), sn = std::sin(g); const float nx = x * cs - y * sn; const float ny = x * sn + y * cs; x = nx; y = ny; }
+			const float k = 1.0f / (2.6f - q);
+			x *= k; y *= k; z *= k;
+			const float kk = 4.5f / (4.5f + z * 1.6f);
+			pt[i] = ImVec2(ctr.x + x * size * 2.2f * kk, ctr.y - y * size * 2.2f * kk);
+			dep[i] = k;
+		}
+		for (int i = 0; i < 16; ++i) {
+			for (int j = i + 1; j < 16; ++j) {
+				const int d = i ^ j;
+				if (!d || (d & (d - 1))) continue;
+				const float dm = (dep[i] + dep[j]) * 0.5f;
+				c.draw->AddLine(pt[i], pt[j], PremiumMenu::Alpha(c.color, c.alpha * PremiumMenu::Clamp01((dm - 0.3f) * 1.2f)), S(1.3f));
+			}
+		}
+		for (int i = 0; i < 16; ++i) c.draw->AddCircleFilled(pt[i], S(2.0f), Rgb(235, 250, 255, c.alpha * PremiumMenu::Clamp01((dep[i] - 0.3f) * 1.2f)));
+	}
+
+	void Orbits(const Ctx& c) {
+		const float w = c.max.x - c.min.x;
+		const ImVec2 ctr = Center(c);
+		static const int palette[6][3] = { { 120, 180, 255 },{ 255, 170, 90 },{ 130, 255, 170 },{ 255, 110, 160 },{ 200, 160, 255 },{ 255, 230, 120 } };
+		for (int k = 5; k >= 1; --k) c.draw->AddCircleFilled(ctr, S(14.0f) * (1.0f + 0.7f * static_cast<float>(k)), Rgb(255, 200, 100, c.alpha * 0.03f));
+		c.draw->AddCircleFilled(ctr, S(14.0f), Rgb(255, 220, 120, c.alpha * 0.9f));
+		for (int i = 0; i < 6; ++i) {
+			const uint32_t ui = static_cast<uint32_t>(i);
+			const float rx = w * (0.12f + 0.065f * static_cast<float>(i));
+			const float ry = rx * 0.30f;
+			const float speed = 0.9f / std::pow(static_cast<float>(i + 1), 1.2f);
+			const float ang = static_cast<float>(c.time * speed) + Hash01(c.seed, ui, 0) * kTau;
+			const float pr = S(3.0f + 3.0f * Hash01(c.seed, ui, 1));
+			Ellipse(c.draw, ctr, rx, ry, Rgb(235, 245, 255, c.alpha * 0.12f), S(1.0f), 48);
+			for (int j = 1; j <= 8; ++j) {
+				const float ta = ang - static_cast<float>(j) * 0.09f;
+				c.draw->AddCircleFilled(ImVec2(ctr.x + std::cos(ta) * rx, ctr.y + std::sin(ta) * ry), pr * (1.0f - static_cast<float>(j) * 0.09f), Rgb(palette[i][0], palette[i][1], palette[i][2], c.alpha * 0.30f * (1.0f - static_cast<float>(j) / 9.0f)));
+			}
+			const ImVec2 p(ctr.x + std::cos(ang) * rx, ctr.y + std::sin(ang) * ry);
+			c.draw->AddCircleFilled(p, pr * 2.2f, Rgb(palette[i][0], palette[i][1], palette[i][2], c.alpha * 0.10f));
+			c.draw->AddCircleFilled(p, pr, Rgb(palette[i][0], palette[i][1], palette[i][2], c.alpha * 0.95f));
+			if (i == 4) Ellipse(c.draw, p, pr * 2.0f, pr * 0.7f, Rgb(255, 255, 255, c.alpha * 0.6f), S(1.0f), 20);
+			if (i == 2) { const float ma = static_cast<float>(c.time * 3.0); c.draw->AddCircleFilled(ImVec2(p.x + std::cos(ma) * pr * 2.6f, p.y + std::sin(ma) * pr * 1.4f), S(1.6f), Rgb(235, 240, 250, c.alpha * 0.9f)); }
+		}
+	}
+
+	void Fireworks(const Ctx& c) {
+		static const int palette[6][3] = { { 255, 120, 120 },{ 255, 210, 100 },{ 120, 255, 180 },{ 120, 190, 255 },{ 220, 140, 255 },{ 255, 160, 230 } };
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		for (uint32_t s = 0; s < 3; ++s) {
+			const double tc = c.time / 3.8 + s / 3.0;
+			const uint32_t cyc = static_cast<uint32_t>(std::floor(tc));
+			const float ph = Frac(tc);
+			const uint32_t key = s + cyc * 23u;
+			const ImVec2 target(c.min.x + (0.15f + 0.70f * Hash01(c.seed, key, 0)) * w, c.min.y + (0.20f + 0.35f * Hash01(c.seed, key, 1)) * h);
+			const ImVec2 launch(target.x + (Hash01(c.seed, key, 2) - 0.5f) * S(30.0f), c.max.y);
+			const int pi = static_cast<int>(Hash01(c.seed, key, 3) * 6.0f) % 6;
+			const int cr = palette[pi][0], cg = palette[pi][1], cb = palette[pi][2];
+			if (ph < 0.3f) {
+				const float q = ph / 0.3f;
+				const float e = 1.0f - (1.0f - q) * (1.0f - q);
+				const ImVec2 p(launch.x + (target.x - launch.x) * e, launch.y + (target.y - launch.y) * e);
+				c.draw->AddLine(p, ImVec2(p.x + (launch.x - p.x) * 0.10f, p.y + (launch.y - p.y) * 0.10f), Rgb(cr, cg, cb, c.alpha * 0.7f), S(1.5f));
+				c.draw->AddCircleFilled(p, S(2.0f), Rgb(255, 255, 255, c.alpha * 0.9f));
+			}
+			else {
+				const float tau = (ph - 0.3f) / 0.7f;
+				constexpr int count = 30;
+				for (int p = 0; p < count; ++p) {
+					const uint32_t up = static_cast<uint32_t>(key * 7u + static_cast<uint32_t>(p));
+					const float ang = kTau * static_cast<float>(p) / count + Hash01(c.seed, up, 4) * 0.3f;
+					const float sp = S(60.0f + 70.0f * Hash01(c.seed, up, 5));
+					auto posAt = [&](float t) { return ImVec2(target.x + std::cos(ang) * sp * t * (1.1f - 0.4f * t), target.y + std::sin(ang) * sp * t * (1.1f - 0.4f * t) + S(70.0f) * t * t); };
+					const ImVec2 now = posAt(tau);
+					const ImVec2 before = posAt(std::max(0.0f, tau - 0.06f));
+					const float a = c.alpha * std::pow(1.0f - tau, 1.3f) * 0.9f;
+					c.draw->AddLine(before, now, Rgb(cr, cg, cb, a * 0.6f), S(1.0f));
+					c.draw->AddCircleFilled(now, S(1.8f) * (1.0f - tau * 0.5f), Rgb(cr, cg, cb, a));
+				}
+			}
+		}
+	}
+
+	void Waves(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const float step = S(6.0f);
+		const ImVec2 moon(c.min.x + w * 0.80f, c.min.y + h * 0.20f);
+		for (int k = 4; k >= 1; --k) c.draw->AddCircleFilled(moon, h * 0.07f * (1.0f + 0.5f * static_cast<float>(k)), Rgb(220, 235, 255, c.alpha * 0.03f));
+		c.draw->AddCircleFilled(moon, h * 0.07f, Rgb(225, 238, 255, c.alpha * 0.45f));
+		const ImU32 layers[4] = { c.color, IM_COL32(70, 160, 255, 255), IM_COL32(60, 220, 200, 255), IM_COL32(150, 120, 255, 255) };
+		for (int l = 0; l < 4; ++l) {
+			const float base = c.min.y + h * (0.62f + 0.08f * static_cast<float>(l));
+			const float amp = h * (0.020f + 0.006f * static_cast<float>(l));
+			const ImU32 top = PremiumMenu::Alpha(layers[l], c.alpha * 0.28f);
+			const ImU32 bottom = PremiumMenu::Alpha(layers[l], 0.0f);
+			for (float x = c.min.x; x < c.max.x; x += step) {
+				const float t = (x - c.min.x) / w;
+				const float y = base + static_cast<float>(std::sin(t * (7.0 + l * 1.5) + c.time * (0.8 + 0.25 * l) + l)) * amp + static_cast<float>(std::sin(t * 15.0 - c.time * 0.6)) * amp * 0.35f;
+				c.draw->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x + step + 1.0f, c.max.y), top, top, bottom, bottom);
+				if (std::fmod(x - c.min.x, step * 2.0f) < step) c.draw->AddRectFilled(ImVec2(x, y - S(1.0f)), ImVec2(x + step, y), PremiumMenu::Alpha(layers[l], c.alpha * 0.5f));
+			}
+		}
+	}
+
+	void Synthwave(const Ctx& c) {
+		const float w = c.max.x - c.min.x, h = c.max.y - c.min.y;
+		const float cx = c.min.x + w * 0.5f;
+		const float horizon = c.min.y + h * 0.64f;
+		const float R = h * 0.20f;
+		auto mix = [](int r0, int g0, int b0, int r1, int g1, int b1, float t, float a) { return Rgb(static_cast<int>(r0 + (r1 - r0) * t), static_cast<int>(g0 + (g1 - g0) * t), static_cast<int>(b0 + (b1 - b0) * t), a); };
+		constexpr int rows = 14;
+		const float rowH = R / static_cast<float>(rows);
+		for (int k = 0; k < rows; ++k) {
+			const float t = static_cast<float>(k) / (rows - 1);
+			const float y0 = horizon - R + static_cast<float>(k) * rowH;
+			const float th = rowH * (1.0f - 0.65f * t * t);
+			const float dy = horizon - (y0 + th * 0.5f);
+			const float hw = std::sqrt(std::max(0.0f, R * R - dy * dy));
+			c.draw->AddRectFilled(ImVec2(cx - hw, y0), ImVec2(cx + hw, y0 + th), mix(255, 210, 90, 255, 60, 170, t, c.alpha * 0.75f));
+		}
+		ImVec2 pts[80];
+		int n = 0;
+		for (float x = c.min.x; x <= c.max.x && n < 80; x += S(10.0f), ++n) {
+			const float u = x - c.min.x;
+			const float m = std::abs(std::sin(u * 0.011f)) * 0.5f + std::abs(std::sin(u * 0.027f + 1.3f)) * 0.35f;
+			pts[n] = ImVec2(x, horizon - m * h * 0.14f);
+		}
+		c.draw->AddPolyline(pts, n, PremiumMenu::Alpha(c.color, c.alpha * 0.55f), ImDrawFlags_None, S(1.2f));
+		c.draw->AddLine(ImVec2(c.min.x, horizon), ImVec2(c.max.x, horizon), PremiumMenu::Alpha(c.color, c.alpha * 0.8f), S(1.5f));
+		for (int i = 0; i < 10; ++i) {
+			const float p = Frac(i / 10.0 + c.time * 0.12);
+			const float y = horizon + p * p * (c.max.y - horizon);
+			c.draw->AddLine(ImVec2(c.min.x, y), ImVec2(c.max.x, y), Rgb(255, 60, 170, c.alpha * 0.45f * p), S(1.0f));
+		}
+		for (int j = -8; j <= 8; ++j) {
+			c.draw->AddLine(ImVec2(cx + static_cast<float>(j) * S(4.0f), horizon), ImVec2(cx + static_cast<float>(j) * w * 0.12f, c.max.y), Rgb(255, 60, 170, c.alpha * 0.30f), S(1.0f));
+		}
+	}
+
+	void Render(ImDrawList* draw, ImVec2 winPos, ImVec2 winEnd, float sidebar, float rounding,
+		double time, int scene, uint32_t seed, ImU32 color, float alpha)
+	{
+		if (alpha <= 0.01f) return;
+		const Ctx c{ draw, ImVec2(winPos.x + sidebar + 1.0f, winPos.y + S(3.0f)), ImVec2(winEnd.x - rounding * 0.45f, winEnd.y - rounding * 0.45f), time, seed, color, alpha };
+		draw->PushClipRect(c.min, c.max, true);
+		switch (scene) {
+		case 0:  Dots(c); break;
+		case 1:  Bubbles(c); break;
+		case 2:  Aurora(c); break;
+		case 3:  Constellation(c); break;
+		case 4:  Rings(c); break;
+		case 5:  Streaks(c); break;
+		case 6:  Earth(c); break;
+		case 7:  Car(c); break;
+		case 8:  Rain(c); break;
+		case 9:  BubbleRain(c); break;
+		case 10: Warp(c); break;
+		case 11: Matrix(c); break;
+		case 12: Snow(c); break;
+		case 13: Fireflies(c); break;
+		case 14: Equalizer(c); break;
+		case 15: Radar(c); break;
+		case 16: Dna(c); break;
+		case 17: Tesseract(c); break;
+		case 18: Orbits(c); break;
+		case 19: Fireworks(c); break;
+		case 20: Waves(c); break;
+		case 21: Synthwave(c); break;
+		default: break;
+		}
+		draw->PopClipRect();
+	}
+}
+
+// ------------------------------------------------------------
+// Drawing helpers (pure drawing, no widget state)
+// ------------------------------------------------------------
+namespace
+{
+	void DrawWindowBackground(ImDrawList* draw, ImVec2 pos, ImVec2 end, double time, float rounding, float ease)
+	{
+		const ImVec4 bg = ImGui::ColorConvertU32ToFloat4(F::Render.Background0);
+		const float breathing = PremiumMenu::Wave(time, 0.7);
+		const ImU32 col = ImGui::ColorConvertFloat4ToU32(PremiumMenu::ClampColor(ImVec4(bg.x + 0.012f * breathing, bg.y + 0.014f * breathing, bg.z + 0.022f * breathing, 1.0f)));
+		draw->AddRectFilled(pos, end, PremiumMenu::Alpha(col, ease), rounding);
+	}
+
+	void DrawTopAccentLine(ImDrawList* draw, ImVec2 pos, float width, float rounding, ImU32 accent, float ease)
+	{
+		draw->AddRectFilled(pos + ImVec2(rounding, 0.0f), pos + ImVec2(width - rounding, H::Draw.Scale(2.0f)), PremiumMenu::Alpha(accent, 0.85f * ease));
+	}
+
+	void DrawSidebar(ImDrawList* draw, ImVec2 pos, ImVec2 end, float sidebar, double time, float rounding, float ease)
+	{
+		const ImVec4 side = ImGui::ColorConvertU32ToFloat4(F::Render.Background1);
+		const float g = PremiumMenu::Wave(time, 0.55);
+		const ImU32 top = ImGui::ColorConvertFloat4ToU32(PremiumMenu::ClampColor(ImVec4(side.x + 0.025f * g, side.y + 0.025f * g, side.z + 0.035f * g, 1.0f)));
+		const ImU32 bottom = ImGui::ColorConvertFloat4ToU32(PremiumMenu::ClampColor(ImVec4(side.x - 0.015f, side.y - 0.015f, side.z - 0.010f, 1.0f)));
+		PremiumMenu::AddRoundedGradientV(draw, pos, ImVec2(pos.x + sidebar, end.y), top, bottom, rounding, ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft, ease);
+		draw->AddRectFilled(ImVec2(pos.x + sidebar, pos.y + rounding), ImVec2(pos.x + sidebar + H::Draw.Scale(1.0f), end.y - rounding), PremiumMenu::Alpha(IM_COL32(255, 255, 255, 13), ease));
+	}
+
+	void DrawHeaderBanner(ImDrawList* draw, ImVec2 min, ImVec2 max, float sidebar, double time, float rounding, float ease)
+	{
+		PremiumMenu::AddRoundedGradientV(draw, min, max, IM_COL32(63, 194, 207, 255), IM_COL32(21, 132, 152, 255), rounding, ImDrawFlags_RoundCornersTopLeft, ease);
+		const float w = max.x - min.x;
+		const float h = max.y - min.y;
+
+		draw->AddRectFilledMultiColor(ImVec2(min.x + rounding, min.y), ImVec2(max.x, min.y + h * 0.55f),
+			PremiumMenu::Alpha(IM_COL32(255, 255, 255, 46), ease), PremiumMenu::Alpha(IM_COL32(255, 255, 255, 62), ease),
+			PremiumMenu::Alpha(IM_COL32(255, 255, 255, 0), ease), PremiumMenu::Alpha(IM_COL32(255, 255, 255, 0), ease));
+
+		const float skew = h * 0.85f;
+		auto streak = [&](float x0, float x1, int alpha) {
+			const float a = min.x + w * x0;
+			const float b = min.x + w * x1;
+			draw->AddQuadFilled(ImVec2(a + skew, min.y), ImVec2(b + skew, min.y), ImVec2(b, max.y), ImVec2(a, max.y), PremiumMenu::Alpha(IM_COL32(235, 252, 255, alpha), ease));
+			};
+
+		draw->PushClipRect(min, max, true);
+		streak(0.30f, 0.56f, 24);
+		streak(0.64f, 0.675f, 34);
+		streak(0.71f, 0.725f, 20);
+
+		DrawGlobe(draw, ImVec2(max.x - w * 0.06f, min.y + h * 0.52f), h * 0.78f, time, IM_COL32(235, 252, 255, 255), 0.16f * ease, H::Draw.Scale(1.0f));
+		draw->PopClipRect();
+
+		const float step = H::Draw.Scale(3.0f);
+		for (float sy = min.y + std::max(step, rounding); sy < max.y; sy += step) {
+			draw->AddLine(ImVec2(min.x, sy), ImVec2(max.x, sy), PremiumMenu::Alpha(IM_COL32(230, 250, 255, 17), ease), H::Draw.Scale(1.0f));
+		}
+
+		draw->AddRectFilled(ImVec2(min.x, max.y - H::Draw.Scale(2.0f)), max, PremiumMenu::Alpha(IM_COL32(7, 35, 43, 190), ease));
+		draw->AddRectFilled(ImVec2(min.x, max.y - H::Draw.Scale(1.0f)), max, PremiumMenu::Alpha(IM_COL32(181, 221, 250, 115), ease));
+
+		const double slot = std::floor(time / 5.0);
+		const int variant = std::min(2, static_cast<int>(Scene::Hash01(7u, static_cast<uint32_t>(slot)) * 3.0f));
+		const float slotT = Scene::Frac(time / 5.0);
+		const float vFade = PremiumMenu::Clamp01(std::min(slotT, 1.0f - slotT) / 0.08f);
+
+		draw->PushClipRect(min, max, true);
+		if (variant == 0) {
+			const float cycle = slotT * 5.0f;
+			if (cycle < 0.82f) {
+				const float t = cycle / 0.82f;
+				const float x = min.x + PremiumMenu::Smooth(t) * sidebar;
+				const float intensity = std::min(PremiumMenu::Clamp01(t / 0.16f), PremiumMenu::Clamp01((1.0f - t) / 0.22f));
+				const float glow = H::Draw.Scale(18.0f);
+				draw->AddRectFilled(ImVec2(x - glow, min.y), ImVec2(x + glow, max.y), PremiumMenu::Alpha(IM_COL32(220, 250, 255, 32), intensity * ease));
+				draw->AddRectFilled(ImVec2(x - H::Draw.Scale(1.5f), min.y), ImVec2(x + H::Draw.Scale(1.5f), max.y), PremiumMenu::Alpha(IM_COL32(240, 253, 255, 145), intensity * ease));
+			}
+		}
+		else if (variant == 1) {
+			for (uint32_t i = 0; i < 6; ++i) {
+				const double tc = time / 2.0 + i / 6.0;
+				const uint32_t cyc = static_cast<uint32_t>(std::floor(tc));
+				const float ph = Scene::Frac(tc);
+				const float a = std::sin(ph * kPi) * vFade;
+				const ImVec2 p(min.x + Scene::Hash01(11u, i + cyc * 11u, 0) * w, min.y + Scene::Hash01(11u, i + cyc * 11u, 1) * h);
+				const float len = H::Draw.Scale(5.0f) * a;
+				draw->AddLine(ImVec2(p.x - len, p.y), ImVec2(p.x + len, p.y), PremiumMenu::Alpha(IM_COL32(245, 253, 255, 255), a * 0.9f * ease), H::Draw.Scale(1.0f));
+				draw->AddLine(ImVec2(p.x, p.y - len), ImVec2(p.x, p.y + len), PremiumMenu::Alpha(IM_COL32(245, 253, 255, 255), a * 0.9f * ease), H::Draw.Scale(1.0f));
+				draw->AddCircleFilled(p, H::Draw.Scale(1.2f), PremiumMenu::Alpha(IM_COL32(255, 255, 255, 255), a * ease));
+			}
+		}
+		else {
+			for (uint32_t i = 0; i < 2; ++i) {
+				const double tc = time / 1.8 + i * 0.5;
+				const uint32_t cyc = static_cast<uint32_t>(std::floor(tc));
+				const float ph = Scene::Frac(tc);
+				const ImVec2 p(min.x + Scene::Hash01(13u, i + cyc * 7u, 0) * w, min.y + Scene::Hash01(13u, i + cyc * 7u, 1) * h);
+				draw->AddCircle(p, ph * H::Draw.Scale(46.0f), PremiumMenu::Alpha(IM_COL32(235, 252, 255, 255), (1.0f - ph) * 0.45f * vFade * ease), 0, H::Draw.Scale(1.2f));
+			}
+		}
+		draw->PopClipRect();
+	}
+}
+
+// ------------------------------------------------------------
+// Widget style
+// ------------------------------------------------------------
+namespace
+{
+	constexpr int kWidgetStyleVars = 4;
+	constexpr int kWidgetStyleColors = 13;
+
+	void PushWidgetStyle()
+	{
+		using namespace ImGui;
+		const ImVec4 a = F::Render.Accent.Value;
+		const ImVec4 b2 = ColorConvertU32ToFloat4(F::Render.Background2);
+		auto shift = [](ImVec4 c, float k) { return PremiumMenu::ClampColor(ImVec4(c.x + k, c.y + k, c.z + k, c.w)); };
+		auto accent = [&](float alpha) { return ImVec4(a.x, a.y, a.z, alpha); };
+
+		PushStyleVar(ImGuiStyleVar_PopupRounding, H::Draw.Scale(9.0f));
+		PushStyleVar(ImGuiStyleVar_PopupBorderSize, H::Draw.Scale(1.0f));
+		PushStyleVar(ImGuiStyleVar_ScrollbarRounding, H::Draw.Scale(6.0f));
+		PushStyleVar(ImGuiStyleVar_ScrollbarSize, H::Draw.Scale(6.0f));
+
+		PushStyleColor(ImGuiCol_FrameBg, b2);
+		PushStyleColor(ImGuiCol_FrameBgHovered, shift(b2, 0.030f));
+		PushStyleColor(ImGuiCol_FrameBgActive, shift(b2, 0.050f));
+		PushStyleColor(ImGuiCol_SliderGrab, accent(1.0f));
+		PushStyleColor(ImGuiCol_SliderGrabActive, shift(accent(1.0f), 0.12f));
+		PushStyleColor(ImGuiCol_CheckMark, accent(1.0f));
+		PushStyleColor(ImGuiCol_Header, accent(0.22f));
+		PushStyleColor(ImGuiCol_HeaderHovered, accent(0.32f));
+		PushStyleColor(ImGuiCol_HeaderActive, accent(0.42f));
+		PushStyleColor(ImGuiCol_PopupBg, shift(b2, -0.010f));
+		PushStyleColor(ImGuiCol_Border, accent(0.10f));
+		PushStyleColor(ImGuiCol_ButtonHovered, shift(b2, 0.040f));
+		PushStyleColor(ImGuiCol_ButtonActive, shift(b2, 0.060f));
+	}
+
+	void PopWidgetStyle()
+	{
+		ImGui::PopStyleColor(kWidgetStyleColors);
+		ImGui::PopStyleVar(kWidgetStyleVars);
+	}
+}
+
+// ------------------------------------------------------------
+// Main menu
+// ------------------------------------------------------------
 void CMenu::DrawMenu()
 {
 	using namespace ImGui;
+	ImGuiIO& io = GetIO();
+	const float dt = std::clamp(io.DeltaTime, 0.0f, 0.1f);
 
-	if (static bool bSetPosition = false; !bSetPosition)
-	{
-		SetNextWindowPos((GetIO().DisplaySize - ImVec2(H::Draw.Scale(750), H::Draw.Scale(500))) / 2, ImGuiCond_FirstUseEver);
-		SetNextWindowSize({ H::Draw.Scale(750), H::Draw.Scale(500) }, ImGuiCond_FirstUseEver);
-		bSetPosition = true;
+	const float width = H::Draw.Scale(kWidth);
+	const float height = H::Draw.Scale(kHeight);
+	const float sidebar = H::Draw.Scale(kSidebar);
+	const float rounding = H::Draw.Scale(kRounding);
+
+	static double globalTime = 0.0;
+	static float openAnim = 0.0f;
+	static float contentFade = 1.0f;
+	static float headerAnim = kHeaderNormal;
+	static float searchAnim = 0.0f;
+	static int lastFrame = -1;
+	static int lastPageKey = -1;
+
+	static int currentTab = 0, aimTab = 0, visualsTab = 0, logsTab = 0, settingsTab = 0;
+	static std::string searchText;
+
+	static std::mt19937 rng{ std::random_device{}() };
+	static std::vector<int> sceneBag;
+	static int sceneCur = 0, sceneNext = -1;
+	static uint32_t seedCur = 1, seedNext = 0;
+	static float sceneTimer = 0.0f, sceneDuration = 9.0f, sceneFade = 0.0f;
+
+	auto randomPeriod = [&] { return std::uniform_real_distribution<float>(kScenePeriodMin, kScenePeriodMax)(rng); };
+	auto nextScene = [&](int avoid) {
+		if (sceneBag.empty()) {
+			sceneBag.resize(Scene::kCount);
+			std::iota(sceneBag.begin(), sceneBag.end(), 0);
+			std::shuffle(sceneBag.begin(), sceneBag.end(), rng);
+			if (sceneBag.back() == avoid) std::swap(sceneBag.back(), sceneBag.front());
+		}
+		const int s = sceneBag.back();
+		sceneBag.pop_back();
+		return s;
+		};
+
+	const int frame = GetFrameCount();
+	if (frame - lastFrame > 1) {
+		openAnim = 0.0f; contentFade = 0.0f;
+		sceneCur = nextScene(sceneCur);
+		seedCur = static_cast<uint32_t>(rng());
+		sceneNext = -1; sceneTimer = 0.0f; sceneFade = 0.0f; sceneDuration = randomPeriod();
+	}
+	lastFrame = frame;
+
+	globalTime += dt;
+	openAnim = PremiumMenu::Animate(openAnim, 1.0f, 4.5f, dt);
+	const float ease = PremiumMenu::Smooth(openAnim);
+
+	sceneTimer += dt;
+	if (sceneNext < 0 && sceneTimer >= sceneDuration) {
+		sceneNext = nextScene(sceneCur);
+		seedNext = static_cast<uint32_t>(rng());
+		sceneFade = 0.0f;
+	}
+	if (sceneNext >= 0) {
+		sceneFade += dt / kSceneCrossfade;
+		if (sceneFade >= 1.0f) {
+			sceneCur = sceneNext; seedCur = seedNext;
+			sceneNext = -1; sceneFade = 0.0f; sceneTimer = 0.0f; sceneDuration = randomPeriod();
+		}
 	}
 
-	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(750), H::Draw.Scale(500) });
-	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
-	{
-		ImVec2 vWindowSize = GetWindowSize();
-		ImVec2 vDrawPos = GetDrawPos();
-		auto pDrawList = GetWindowDrawList();
-		float flSize = H::Draw.Scale(140);
-		float flInset = H::Draw.Scale();
-		float flOffset = 0.f;
+	SetNextWindowPos((io.DisplaySize - ImVec2(width, height)) * 0.5f, ImGuiCond_FirstUseEver);
+	SetNextWindowSize(ImVec2(width, height), ImGuiCond_FirstUseEver);
 
-		Bind_t tBind;
-		if (!F::Binds.GetBind(CurrentBind, &tBind))
-			CurrentBind = DEFAULT_BIND;
+	PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(width, height));
+	PushStyleVar(ImGuiStyleVar_WindowRounding, rounding);
+	PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	PushStyleVar(ImGuiStyleVar_Alpha, ease);
 
-		if (CurrentBind != DEFAULT_BIND) // bind
+	if (Begin("##PremiumMain", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground)) {
 		{
-			flOffset = H::Draw.Scale(60);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize - flInset, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize - flInset, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize - flInset, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
+			const ImVec2 size = GetWindowSize();
+			const float margin = H::Draw.Scale(80.0f);
+			ImVec2 p = GetWindowPos();
+			const ImVec2 clamped(std::clamp(p.x, margin - size.x, io.DisplaySize.x - margin), std::clamp(p.y, 0.0f, std::max(0.0f, io.DisplaySize.y - margin)));
+			if (clamped.x != p.x || clamped.y != p.y) SetWindowPos(clamped);
+		}
 
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
+		const ImVec2 windowSize = GetWindowSize();
+		const ImVec2 windowPos = GetWindowPos();
+		const ImVec2 windowEnd = windowPos + windowSize;
+		ImDrawList* draw = GetWindowDrawList();
+		const ImU32 accentU32 = ColorConvertFloat4ToU32(F::Render.Accent.Value);
+
+		DrawWindowBackground(draw, windowPos, windowEnd, globalTime, rounding, ease);
+
+		{
+			const float fade = PremiumMenu::Smooth(sceneFade);
+			Scene::Render(draw, windowPos, windowEnd, sidebar, rounding, globalTime, sceneCur, seedCur, accentU32, (sceneNext >= 0 ? 1.0f - fade : 1.0f) * ease);
+			if (sceneNext >= 0) Scene::Render(draw, windowPos, windowEnd, sidebar, rounding, globalTime, sceneNext, seedNext, accentU32, fade * ease);
+		}
+
+		DrawTopAccentLine(draw, windowPos, windowSize.x, rounding, accentU32, ease);
+		DrawSidebar(draw, windowPos, windowEnd, sidebar, globalTime, rounding, ease);
+
+		Bind_t bind{};
+		if (!F::Binds.GetBind(CurrentBind, &bind)) CurrentBind = DEFAULT_BIND;
+
+		const bool editingBind = CurrentBind != DEFAULT_BIND;
+		headerAnim = PremiumMenu::Animate(headerAnim, editingBind ? kHeaderBind : kHeaderNormal, 14.0f, dt);
+		const float headerHeight = H::Draw.Scale(headerAnim);
+		const ImVec2 headerMin = windowPos;
+		const ImVec2 headerMax(windowPos.x + sidebar, windowPos.y + headerHeight);
+
+		DrawHeaderBanner(draw, headerMin, headerMax, sidebar, globalTime, rounding, ease);
+
+		if (editingBind) {
+			SetCursorPos(ImVec2(H::Draw.Scale(16.0f), H::Draw.Scale(12.0f)));
+			PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.55f));
 			FText("Editing bind", {}, 0, F::Render.FontRegular);
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(35) });
-			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(tBind.m_sName, flSize - H::Draw.Scale(28)).c_str(), {}, 0, F::Render.FontRegular);
 			PopStyleColor();
 
-			SetCursorPos({ flSize - H::Draw.Scale(31), H::Draw.Scale(6) });
-			if (IconButton(ICON_MD_CANCEL))
-				CurrentBind = DEFAULT_BIND;
-		}
-		else if (!Vars::Menu::CheatTitle.Value.empty()) // title
-		{
-			flOffset = H::Draw.Scale(36);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize - flInset, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize - flInset, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize - flInset, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
-
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
-			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(Vars::Menu::CheatTitle.Value, flSize - H::Draw.Scale(28), F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
+			SetCursorPos(ImVec2(H::Draw.Scale(16.0f), H::Draw.Scale(35.0f)));
+			PushStyleColor(ImGuiCol_Text, ColorConvertU32ToFloat4(kIceBlue));
+			FText(TruncateText(bind.m_sName, sidebar - H::Draw.Scale(42.0f)).c_str(), {}, 0, F::Render.FontBold);
 			PopStyleColor();
+
+			SetCursorPos(ImVec2(sidebar - H::Draw.Scale(36.0f), H::Draw.Scale(9.0f)));
+			if (IconButton(ICON_MD_CANCEL)) CurrentBind = DEFAULT_BIND;
 		}
-		else
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize - flInset, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersLeft);
+		else {
+			// --- TITLE INTEGRATED WITH CONFIG VARS ---
+			std::string sTitle = Vars::Menu::CheatTitle.Value.empty() ? "Amalgam" : TruncateText(Vars::Menu::CheatTitle.Value, sidebar - H::Draw.Scale(42.0f), F::Render.FontBold);
+			const char* label = sTitle.c_str();
 
-		pDrawList->PushClipRect({ 0, 0 }, { GetIO().DisplaySize.x, GetIO().DisplaySize.y }, false);
-		RenderTwoToneBackground(flSize, {}, F::Render.Background1, F::Render.Background2, 0.f, false);
-		pDrawList->PopClipRect();
+			ImFont* headerFont = F::Render.FontBold;
+			const float labelSize = H::Draw.Scale(16.0f);
+			const ImVec2 labelPx = headerFont ? headerFont->CalcTextSizeA(labelSize, 1000.0f, 0.0f, label) : CalcTextSize(label);
 
-		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iMiscTab = 0, iLogsTab = 0, iSettingsTab = 0;
+			const float globeR = H::Draw.Scale(8.5f);
+			const float gap = H::Draw.Scale(6.0f);
+			const float groupW = globeR * 2.0f + gap + labelPx.x;
+			const float groupX = headerMin.x + (sidebar - groupW) * 0.5f;
+			const float midY = headerMin.y + headerHeight * 0.5f - H::Draw.Scale(1.0f);
+
+			const ImVec2 globeC(groupX + globeR, midY);
+			const ImVec2 labelPos(groupX + globeR * 2.0f + gap, midY - labelPx.y * 0.5f);
+
+			DrawGlobe(draw, globeC + ImVec2(H::Draw.Scale(1.0f), H::Draw.Scale(1.5f)), globeR, globalTime, IM_COL32(4, 28, 38, 255), 0.55f * ease, H::Draw.Scale(1.5f));
+			DrawGlobe(draw, globeC, globeR, globalTime, IM_COL32(248, 253, 255, 255), ease, H::Draw.Scale(1.4f));
+
+			const float o = H::Draw.Scale(1.5f);
+			const ImU32 outline = PremiumMenu::Alpha(IM_COL32(6, 40, 52, 235), ease);
+			const ImVec2 offsets[8] = { { -o, 0 },{ o, 0 },{ 0, -o },{ 0, o },{ -o, -o },{ o, -o },{ -o, o },{ o, o } };
+
+			draw->AddText(headerFont, labelSize, labelPos + ImVec2(H::Draw.Scale(2.0f), H::Draw.Scale(2.5f)), PremiumMenu::Alpha(IM_COL32(4, 28, 38, 120), ease), label);
+			for (const ImVec2& off : offsets) {
+				draw->AddText(headerFont, labelSize, labelPos + off, outline, label);
+			}
+			draw->AddText(headerFont, labelSize, labelPos, PremiumMenu::Alpha(IM_COL32(248, 253, 255, 255), ease), label);
+		}
+
 		PushFont(F::Render.FontBold);
 		FTabs(
 			{
 				{ "AIMBOT", "GENERAL", "DRAW" },
 				{ "HVH" },
 				{ "VISUALS", "ESP", "MISC##", "MENU" },
-				{ "MISC", "GENERAL", "BOTS" },
-				{ "PLAYERLIST", "SETTINGS##", "OUTPUT" },
+				{ "MISC" },
+				{ "LOGS", "PLAYERLIST", "SETTINGS##", "OUTPUT" },
 				{ "SETTINGS", "CONFIG", "BINDS", "MATERIALS", "MISC##" }
 			},
-			{ &iTab, &iAimbotTab, nullptr, &iVisualsTab, &iMiscTab, &iLogsTab, &iSettingsTab },
-			{ flSize - H::Draw.Scale(16), H::Draw.Scale(36) },
-			{ H::Draw.Scale(8), H::Draw.Scale(8) + flOffset },
+			{ &currentTab, &aimTab, nullptr, &visualsTab, nullptr, &logsTab, &settingsTab },
+			{ sidebar - H::Draw.Scale(20.0f), H::Draw.Scale(40.0f) },
+			{ H::Draw.Scale(12.0f), H::Draw.Scale(12.0f) + headerHeight },
 			FTabsEnum::Vertical | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarLeft,
-			{ { ICON_MD_PERSON }, { ICON_MD_BOLT }, { ICON_MD_VISIBILITY }, { ICON_MD_ARTICLE }, { ICON_MD_IMPORT_CONTACTS }, { ICON_MD_SETTINGS } },
-			{ H::Draw.Scale(10), 0 }, {},
-			{}, { H::Draw.Scale(22), 0 }
+			{
+				{ ICON_MD_GPS_FIXED },   // AIMBOT
+				{ ICON_MD_SHIELD },      // HVH
+				{ ICON_MD_VISIBILITY },  // VISUALS
+				{ ICON_MD_LAYERS },      // MISC
+				{ ICON_MD_MENU_BOOK },   // LOGS
+				{ ICON_MD_SETTINGS }     // SETTINGS
+			},
+			{ H::Draw.Scale(14.0f), 0 }, {}, {}, { H::Draw.Scale(26.0f), 0 }
 		);
 		PopFont();
 
-		static std::string sSearch = "";
-		SetCursorPos({ H::Draw.Scale(8), vWindowSize.y - H::Draw.Scale(37) });
-		FInputText("Search...", sSearch, H::Draw.Scale(123), ImGuiInputTextFlags_None);
-		bool bSearch = /*IsItemFocused() ||*/ !sSearch.empty();
-		if (!bSearch || FCalcTextSize(sSearch.c_str()).x < 86.f)
-		{
-			SetCursorPos({ H::Draw.Scale(109), vWindowSize.y - H::Draw.Scale(31) });
-			IconImage(ICON_MD_SEARCH);
-		}
-		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y, H::Draw.Scale(140), vWindowSize.y - H::Draw.Scale(45)))
-			sSearch = "";
+		SetCursorPos(ImVec2(H::Draw.Scale(12.0f), windowSize.y - H::Draw.Scale(46.0f)));
+		PushStyleVar(ImGuiStyleVar_FrameRounding, H::Draw.Scale(9.0f));
+		PushStyleVar(ImGuiStyleVar_FrameBorderSize, H::Draw.Scale(1.0f));
+		PushStyleColor(ImGuiCol_FrameBg, ColorConvertU32ToFloat4(F::Render.Background2));
 
-		SetCursorPos({ flSize, 0 });
-		PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
-		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(8), H::Draw.Scale(8) });
-		if (BeginChild("Page", { vWindowSize.x - flSize, vWindowSize.y }, ImGuiChildFlags_AlwaysUseWindowPadding))
-		{
-			if (!bSearch)
-			{
-				switch (iTab)
-				{
-				case 0: MenuAimbot(iAimbotTab); break;
-				case 1: MenuHVH(); break;
-				case 2: MenuVisuals(iVisualsTab); break;
-				case 3: MenuMisc(iMiscTab); break;
-				case 4: MenuLogs(iLogsTab); break;
-				case 5: MenuSettings(iSettingsTab); break;
-				}
-			}
-			else
-				MenuSearch(sSearch);
-		} EndChild();
+		const ImVec4 accent = F::Render.Accent.Value;
+		PushStyleColor(ImGuiCol_Border, ImVec4(accent.x, accent.y, accent.z, 0.12f + 0.43f * searchAnim));
+
+		if (io.KeyCtrl && IsKeyPressed(ImGuiKey_F, false) && IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) SetKeyboardFocusHere();
+		FInputText("Search...", searchText, H::Draw.Scale(128.0f), ImGuiInputTextFlags_None);
+
+		const bool searchActive = IsItemActive();
+		const bool searchHovered = IsItemHovered();
+		if (searchActive && IsKeyPressed(ImGuiKey_Escape, false)) searchText.clear();
+		searchAnim = PremiumMenu::Animate(searchAnim, (searchActive || searchHovered || !searchText.empty()) ? 1.0f : 0.0f, 10.0f, dt);
+		PopStyleColor(2);
 		PopStyleVar(2);
 
-		End();
+		const bool searching = !searchText.empty();
+		const int pageKey = currentTab | (aimTab << 4) | (visualsTab << 8) | (logsTab << 12) | (settingsTab << 16) | ((searching ? 1 : 0) << 20);
+		if (pageKey != lastPageKey) {
+			contentFade = 0.0f;
+			lastPageKey = pageKey;
+		}
+		contentFade = PremiumMenu::Animate(contentFade, 1.0f, 8.0f, dt);
+		const float pageAlpha = PremiumMenu::Smooth(contentFade) * ease;
+
+		SetCursorPos(ImVec2(sidebar, 0.0f));
+		PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(H::Draw.Scale(8.0f), H::Draw.Scale(8.0f)));
+		PushStyleVar(ImGuiStyleVar_ChildRounding, H::Draw.Scale(12.0f));
+		PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+
+		if (BeginChild("##PremiumPage", ImVec2(windowSize.x - sidebar, windowSize.y), ImGuiChildFlags_AlwaysUseWindowPadding)) {
+			PushStyleVar(ImGuiStyleVar_Alpha, pageAlpha);
+			PushWidgetStyle();
+			if (!searching) {
+				switch (currentTab) {
+				case 0: MenuAimbot(aimTab); break;
+				case 1: MenuHVH(); break;
+				case 2: MenuVisuals(visualsTab); break;
+				case 3: MenuMisc(); break;
+				case 4: MenuLogs(logsTab); break;
+				case 5: MenuSettings(settingsTab); break;
+				default: break;
+				}
+			}
+			else {
+				MenuSearch(searchText);
+			}
+			PopWidgetStyle();
+			PopStyleVar();
+		}
+		EndChild();
+
+		PopStyleColor();
+		PopStyleVar(2);
 	}
-	PopStyleVar();
+
+	End();
+	PopStyleVar(5);
 }
 
 #pragma region Tabs
@@ -618,7 +1681,6 @@ void CMenu::MenuAimbot(int iTab)
 		}
 		break;
 	}
-
 	}
 }
 
@@ -663,8 +1725,8 @@ void CMenu::MenuHVH(int iTab)
 						FSlider(Vars::AntiAim::SpinSpeed, FSliderEnum::Left);
 					}
 					PopTransparent();
+					SetCursorPos({ GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, GetRowPos() + H::Draw.Scale(8) });
 					FToggle(Vars::AntiAim::MinWalk, FToggleEnum::Left);
-					FToggle(Vars::AntiAim::TauntSpin, FToggleEnum::Right);
 				} EndSection();
 				if (Vars::Debug::Options.Value)
 				{
@@ -1374,71 +2436,11 @@ void CMenu::MenuMisc(int iTab)
 					FDropdown(Vars::Misc::Automation::AntiBackstab); // pitch/fake _might_ slip up some auto backstabs
 					FToggle(Vars::Misc::Automation::TauntControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Right);
-					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::AntiAutobalance, FToggleEnum::Right);
-					PushTransparent(!Vars::Misc::Automation::AntiAutobalance.Value);
-					{
-						FDropdown(Vars::Misc::Automation::AntiAutobalanceMode);
-					}
-					PopTransparent();
+					FToggle(Vars::Misc::Automation::AntiAutobalance, FToggleEnum::Left);
+					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AutoF2Ignored, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoF1Priority, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AcceptItemDrops);
-					FToggle(Vars::Misc::Automation::AutoRetry, FToggleEnum::Left);
-					FSlider(Vars::Misc::Automation::AutoRetryHealth, FSliderEnum::Right);
-					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
-					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
-					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
-				} EndSection();
-				if (Section("Voting", 8))
-				{
-					FDropdown(Vars::Misc::Automation::AutoVote);
-					PushTransparent(!(Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Defend)
-						&& !(Vars::Misc::Automation::AutoVote.Value & Vars::Misc::Automation::AutoVoteEnum::Assist));
-					{
-						FToggle(Vars::Misc::Automation::AutoVoteDelay, FToggleEnum::Left);
-						PushTransparent(!Vars::Misc::Automation::AutoVoteDelay.Value);
-						{
-							FSlider(Vars::Misc::Automation::AutoVoteDelayInterval, FSliderEnum::Right);
-						}
-						PopTransparent();
-					}
-					PopTransparent();
-					FToggle(Vars::Misc::Automation::AutoVoteMap, FToggleEnum::Left);
-					FSlider(Vars::Misc::Automation::AutoVoteMapOption, FSliderEnum::Right);
-				} EndSection();
-				if (Section("Taunts", 8))
-				{
-					FToggle(Vars::Misc::Automation::AutoTaunt, FToggleEnum::Left);
-					FSlider(Vars::Misc::Automation::AutoTauntChance, FSliderEnum::Right);
-					FSlider(Vars::Misc::Automation::AutoTauntSlot);
-				} EndSection();
-				if (Section("Chat automation"))
-				{
-					FToggle(Vars::Misc::Automation::ChatSpam::Enable, FToggleEnum::Left);
-					FSlider(Vars::Misc::Automation::ChatSpam::Interval, FSliderEnum::Right);
-					PushTransparent(!Vars::Misc::Automation::ChatSpam::Enable.Value);
-					{
-						FToggle(Vars::Misc::Automation::ChatSpam::TeamChat, FToggleEnum::Left);
-						FToggle(Vars::Misc::Automation::ChatSpam::Randomize, FToggleEnum::Right);
-					}
-					PopTransparent();
-					FToggle(Vars::Misc::Automation::ChatSpam::AutoReply, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::ChatSpam::VoteKickReply, FToggleEnum::Right);
-					FToggle(Vars::Misc::Automation::KillSay::Enable, FToggleEnum::Left);
-					FSlider(Vars::Misc::Automation::KillSay::Chance, FSliderEnum::Right);
-					PushTransparent(!Vars::Misc::Automation::KillSay::Enable.Value);
-					{
-						FToggle(Vars::Misc::Automation::KillSay::TeamChat);
-					}
-					PopTransparent();
-				} EndSection();
-				if (Section("Automation extras"))
-				{
-					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Left);
-					FSlider("Achievement ID", &Vars::Misc::Automation::AchievementSpamID.Value, 0, 3000, 1);
-					FToggle(Vars::Misc::Automation::CallVoteSpam, FToggleEnum::Left);
 				} EndSection();
 				if (Section("Mann vs. Machine", 8))
 				{
@@ -1487,48 +2489,8 @@ void CMenu::MenuMisc(int iTab)
 				if (Section("Queueing"))
 				{
 					FDropdown(Vars::Misc::Queueing::ForceRegions);
-					FToggle(Vars::Misc::Queueing::ExtendQueue);
-					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoBootCampQueue, FToggleEnum::Left);
-					FSlider(Vars::Misc::Queueing::QueueDelay, FSliderEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoDumpProfiles, FToggleEnum::Left);
-					FSlider(Vars::Misc::Queueing::AutoDumpDelay, FSliderEnum::Right);
-				} EndSection();
-				if (Section("Requeue"))
-				{
-					FToggle(Vars::Misc::Queueing::RQif);
-					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
-					{
-						FSlider(Vars::Misc::Queueing::RQplt);
-						FSlider(Vars::Misc::Queueing::RQpgt);
-						FToggle(Vars::Misc::Queueing::RQkick);
-						FToggle(Vars::Misc::Queueing::RQnoAbandon);
-						FToggle(Vars::Misc::Queueing::RQIgnoreFriends);
-						FToggle(Vars::Misc::Queueing::RQLTM);
-					}
-					PopTransparent();
-				} EndSection();
-				if (Section("Auto items"))
-				{
-					FDropdown(Vars::Misc::Automation::AutoItem::Enable);
-					FSlider(Vars::Misc::Automation::AutoItem::Interval);
-					PushTransparent(!(Vars::Misc::Automation::AutoItem::Enable.Value & Vars::Misc::Automation::AutoItem::EnableEnum::Weapons));
-					{
-						FSDropdown(Vars::Misc::Automation::AutoItem::Primary, FDropdownEnum::Left);
-						FSDropdown(Vars::Misc::Automation::AutoItem::Secondary, FDropdownEnum::Right);
-						FSDropdown(Vars::Misc::Automation::AutoItem::Melee);
-					}
-					PopTransparent();
-					PushTransparent(!(Vars::Misc::Automation::AutoItem::Enable.Value & Vars::Misc::Automation::AutoItem::EnableEnum::Hats));
-					{
-						FSlider("Hat 1", &Vars::Misc::Automation::AutoItem::FirstHat.Value, 1, 3000, 1, "%i", FSliderEnum::Left);
-						FSlider("Hat 2", &Vars::Misc::Automation::AutoItem::SecondHat.Value, 1, 3000, 1, "%i", FSliderEnum::Right);
-						FSlider("Hat 3", &Vars::Misc::Automation::AutoItem::ThirdHat.Value, 1, 3000, 1, "%i");
-					}
-					PopTransparent();
+					FToggle(Vars::Misc::Queueing::ExtendQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Right);
 				} EndSection();
 				if (Section("Sound"))
 				{
@@ -1542,177 +2504,7 @@ void CMenu::MenuMisc(int iTab)
 		}
 		break;
 	}
-	case 1:
-		MenuBots();
-		break;
 	}
-}
-
-void CMenu::MenuBots()
-{
-	using namespace ImGui;
-	using namespace Vars::Misc::Movement;
-
-	if (!BeginTable("BotsTable", 2))
-		return;
-
-	TableNextColumn();
-	if (Section("Nav engine"))
-	{
-		FToggle(NavEngine::Enabled);
-		TextDisabled("Active: %s | Mesh: %s", NavEngine::Enabled.Value ? "on" : "off", F::NavEngine.IsNavMeshLoaded() ? "loaded" : "not loaded");
-		TextDisabled("NavBot: %s | FollowBot: %s", NavBot::Enabled.Value ? "on" : "off", FollowBot::Enabled.Value ? "on" : "off");
-		TextDisabled("Path: %s | Priority: %d", F::NavEngine.IsPathing() ? "active" : "idle", static_cast<int>(F::NavEngine.m_eCurrentPriority));
-		if (!F::NavEngine.m_sLastFailureReason.empty())
-			TextDisabled("Last nav reason: %s", F::NavEngine.m_sLastFailureReason.c_str());
-		if (const std::string sNavPath = F::NavEngine.GetNavFilePath(); !sNavPath.empty())
-			TextDisabled("%s", sNavPath.c_str());
-		FToggle(NavEngine::PathInSetup);
-		FToggle(NavBot::SmartJump);
-		PushTransparent(!NavEngine::Enabled.Value);
-		{
-			FDropdown(NavEngine::Draw, FDropdownEnum::Multi);
-			FColorPicker(Vars::Colors::NavbotPath);
-			FColorPicker(Vars::Colors::NavbotArea, FColorPickerEnum::Left);
-			FColorPicker(Vars::Colors::NavbotBlacklist, FColorPickerEnum::Right);
-			FSlider(NavEngine::StickyIgnoreTime);
-			FSlider(NavEngine::StuckDetectTime);
-			FSlider(NavEngine::StuckBlacklistTime);
-			FSlider(NavEngine::StuckExpireTime);
-			FSlider(NavEngine::StuckTime);
-			FToggle(NavEngine::VischeckEnabled);
-			FSlider(NavEngine::VischeckTime);
-			FSlider(NavEngine::VischeckCacheTime);
-		}
-		PopTransparent();
-	} EndSection();
-	if (Section("Navbot"))
-	{
-		PushTransparent(!NavEngine::Enabled.Value);
-		{
-			FToggle(NavBot::Enabled);
-			PushTransparent(!NavBot::Enabled.Value || !NavEngine::Enabled.Value);
-			{
-				FDropdown(NavBot::RechargeDT);
-				PushTransparent(Transparent || !NavBot::RechargeDT.Value);
-				{
-					FSlider(NavBot::RechargeDTDelay);
-				}
-				PopTransparent();
-				FDropdown(NavBot::Preferences);
-				FDropdown(NavBot::Personality);
-				FDropdown(NavBot::Blacklist);
-				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::NormalThreats));
-				{
-					FSlider(NavBot::BlacklistDelay);
-				}
-				PopTransparent();
-				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::DormantThreats));
-				{
-					FSlider(NavBot::BlacklistDormantDelay);
-				}
-				PopTransparent();
-				PushTransparent(Transparent || !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::NormalThreats) && !(NavBot::Blacklist.Value & NavBot::BlacklistEnum::DormantThreats));
-				{
-					FSlider(NavBot::BlacklistSlightDangerLimit);
-				}
-				PopTransparent();
-				FSlider(NavBot::MeleeTargetRange);
-				FToggle(NavBot::DangerOverlay);
-				PushTransparent(!NavBot::DangerOverlay.Value);
-				{
-					FSlider(NavBot::DangerOverlayMaxDist);
-				}
-				PopTransparent();
-			}
-			PopTransparent();
-		}
-		PopTransparent();
-	} EndSection();
-	if (Vars::Debug::Options.Value)
-	{
-		if (Section("Navbot debug"))
-		{
-			FSlider(NavBot::StickyDangerRange);
-			FSlider(NavBot::ProjectileDangerRange);
-			FToggle(NavEngine::OffPathRepath);
-		} EndSection();
-	}
-
-	TableNextColumn();
-	if (Section("Followbot"))
-	{
-		using namespace FollowBot;
-		FToggle(Enabled);
-		PushTransparent(!NavEngine::Enabled.Value);
-		{
-			FDropdown(UseNav);
-		}
-		PopTransparent();
-		FDropdown(Targets);
-		FDropdown(Prefer);
-		FDropdown(LookAtPath);
-		PushTransparent(!LookAtPath.Value);
-		{
-			FDropdown(LookAtPathMode);
-			FToggle(LookAtPathNoSnap);
-		}
-		PopTransparent();
-		FSlider(MaxNodes);
-		FSlider(MinPriority);
-		FSlider(ActivationDistance);
-		FSlider(FollowDistance);
-		FSlider(AbandonDistance);
-		PushTransparent(!UseNav.Value);
-		{
-			FSlider(NavAbandonDistance);
-		}
-		PopTransparent();
-		FToggle(DrawPath);
-		FColorPicker(Vars::Colors::FollowbotPathLine, FColorPickerEnum::Left);
-		FColorPicker(Vars::Colors::FollowbotPathBox, FColorPickerEnum::Right);
-	} EndSection();
-	if (Section("Bot utils"))
-	{
-		PushTransparent(!NavEngine::Enabled.Value);
-		{
-			FDropdown(NavEngine::LookAtPath);
-		}
-		PopTransparent();
-		PushTransparent(!NavEngine::LookAtPath.Value && !FollowBot::LookAtPath.Value);
-		{
-			FSlider(BotUtils::LookAtPathSpeed);
-			FToggle(BotUtils::LookAtPathDebug);
-		}
-		PopTransparent();
-		FDropdown(BotUtils::WeaponSlot);
-		FDropdown(BotUtils::AutoScope);
-		PushTransparent(!BotUtils::AutoScope.Value);
-		{
-			FSlider(BotUtils::AutoScopeCancelTime);
-		}
-		PopTransparent();
-		FToggle(BotUtils::AutoHeatmakerFocus);
-	} EndSection();
-	if (Section("Autojoin"))
-	{
-		FDropdown(Vars::Misc::Automation::ForceClass, { "Off", "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy" }, { 0, 1, 3, 7, 4, 6, 9, 5, 2, 8 });
-		TextDisabled("Configured class ID: %d | Active class ID: %d", Vars::Misc::Automation::ForceClass[DEFAULT_BIND], Vars::Misc::Automation::ForceClass.Value);
-		TextDisabled("Runtime: %s", F::AutoJoin.m_sStatus.c_str());
-		FToggle(Vars::Misc::Automation::RandomClass);
-		PushTransparent(!Vars::Misc::Automation::RandomClass.Value);
-		{
-			FDropdown(Vars::Misc::Automation::RandomClassExclude, FDropdownEnum::Multi);
-			FSlider(Vars::Misc::Automation::RandomClassInterval);
-		}
-		PopTransparent();
-	} EndSection();
-	if (Section("Named pipe"))
-	{
-		FToggle(Vars::Misc::Automation::NamedPipe);
-	} EndSection();
-
-	EndTable();
 }
 
 void CMenu::MenuLogs(int iTab)
@@ -2112,8 +2904,7 @@ void CMenu::MenuLogs(int iTab)
 			static int iID = -1;
 			static PriorityLabel_t tTag = {};
 
-			// Three stacked priority controls need their own vertical space before the tag list.
-			auto vTable = WidgetTable(3, H::Draw.Scale(112), { GetWindowWidth() / 2, GetWindowWidth() / 2 - H::Draw.Scale(90) - GetStyle().WindowPadding.x });
+			auto vTable = WidgetTable(3, H::Draw.Scale(48), { GetWindowWidth() / 2, GetWindowWidth() / 2 - H::Draw.Scale(90) - GetStyle().WindowPadding.x });
 
 			if (BeginWidgetTable(0, vTable))
 			{
@@ -2137,8 +2928,6 @@ void CMenu::MenuLogs(int iTab)
 				{
 					SetCursorPosY(GetCursorPos().y + H::Draw.Scale(12));
 					FSlider("Priority", &tTag.m_iPriority, -10, 10);
-					FSlider("Followbot priority", &tTag.m_iFollowPriority, -1, 10, 1, tTag.m_iFollowPriority < 0 ? "Ignore" : "%i");
-					FDropdown("Vote priority", &tTag.m_iVotePriority, { "Defend", "Ignore", "Kick" }, { -1, 0, 1 }, FDropdownEnum::Right);
 				}
 				PopTransparent();
 			} EndChild();
@@ -2162,13 +2951,11 @@ void CMenu::MenuLogs(int iTab)
 				if (bCreate)
 				{
 					F::PlayerUtils.m_bSave = true;
-					if (iID >= 0 && iID < int(F::PlayerUtils.m_vTags.size()))
+					if (iID > -1 || iID < F::PlayerUtils.m_vTags.size())
 					{
 						F::PlayerUtils.m_vTags[iID].m_sName = tTag.m_sName;
 						F::PlayerUtils.m_vTags[iID].m_tColor = tTag.m_tColor;
 						F::PlayerUtils.m_vTags[iID].m_iPriority = tTag.m_iPriority;
-						F::PlayerUtils.m_vTags[iID].m_iFollowPriority = tTag.m_iFollowPriority;
-						F::PlayerUtils.m_vTags[iID].m_iVotePriority = tTag.m_iVotePriority;
 						F::PlayerUtils.m_vTags[iID].m_bLabel = tTag.m_bLabel;
 					}
 					else
@@ -2185,7 +2972,7 @@ void CMenu::MenuLogs(int iTab)
 			{
 				int _iID = std::distance(F::PlayerUtils.m_vTags.begin(), it);
 
-				ImVec2 vOriginalPos = { !_tTag.m_bLabel ? GetStyle().WindowPadding.x : GetWindowWidth() * 2 / 3 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(160 + 36 * y) };
+				ImVec2 vOriginalPos = { !_tTag.m_bLabel ? GetStyle().WindowPadding.x : GetWindowWidth() * 2 / 3 + GetStyle().WindowPadding.x / 2, H::Draw.Scale(96 + 36 * y) };
 
 				// background
 				float flWidth = GetWindowWidth() * (_tTag.m_bLabel ? 1.f / 3 : 2.f / 3) - GetStyle().WindowPadding.x * 1.5f;
@@ -2245,8 +3032,6 @@ void CMenu::MenuLogs(int iTab)
 					tTag.m_sName = _tTag.m_sName;
 					tTag.m_tColor = _tTag.m_tColor;
 					tTag.m_iPriority = _tTag.m_iPriority;
-					tTag.m_iFollowPriority = _tTag.m_iFollowPriority;
-						tTag.m_iVotePriority = _tTag.m_iVotePriority;
 					tTag.m_bLabel = _tTag.m_bLabel;
 				}
 				else if (bPopup)
@@ -2285,8 +3070,6 @@ void CMenu::MenuLogs(int iTab)
 					}
 					PopDisabled();
 					if (FSlider("Priority##", &_tTag2.m_iPriority, -10, 10))
-						bSave = true;
-					if (FSlider("Followbot priority##", &_tTag2.m_iFollowPriority, -1, 10, 1, _tTag2.m_iFollowPriority < 0 ? "Ignore" : "%i"))
 						bSave = true;
 
 					if (bSave)
@@ -2337,8 +3120,8 @@ void CMenu::MenuLogs(int iTab)
 			};
 
 			PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
-			SetCursorPos({ H::Draw.Scale(13), H::Draw.Scale(144) }); FText("Priorities");
-			SetCursorPos({ GetWindowWidth() * 2 / 3 + H::Draw.Scale(9), H::Draw.Scale(144) }); FText("Labels");
+			SetCursorPos({ H::Draw.Scale(13), H::Draw.Scale(80) }); FText("Priorities");
+			SetCursorPos({ GetWindowWidth() * 2 / 3 + H::Draw.Scale(9), H::Draw.Scale(80) }); FText("Labels");
 			PopStyleColor();
 
 			std::vector<std::pair<std::vector<PriorityLabel_t>::iterator, PriorityLabel_t>> vPriorities = {}, vLabels = {};
@@ -2387,7 +3170,7 @@ void CMenu::MenuLogs(int iTab)
 				fDrawTag(it, _tTag, iLabels);
 				iLabels++;
 			}
-			SetCursorPos({ 0, H::Draw.Scale(124 + 36 * std::max(iPriorities, iLabels)) }); DebugDummy({ 0, H::Draw.Scale(28) });
+			SetCursorPos({ 0, H::Draw.Scale(60 + 36 * std::max(iPriorities, iLabels)) }); DebugDummy({ 0, H::Draw.Scale(28) });
 		} EndSection();
 		{
 			PushDisabled(F::PlayerUtils.m_bLoad);
@@ -2440,12 +3223,12 @@ void CMenu::MenuLogs(int iTab)
 							mPlayerAliases.clear();
 							mAs.clear();
 							vTags = {
-													{ "Default", { 200, 200, 200, 255 }, 0, 0, 0, false, false, true },
-													{ "Ignored", { 200, 200, 200, 255 }, -1, 0, -1, false, true, true },
-													{ "Cheater", { 255, 100, 100, 255 }, 1, 0, 0, false, true, true },
-													{ "Friend", { 100, 255, 100, 255 }, 0, 2, -1, true, false, true },
-													{ "Party", { 100, 100, 255, 255 }, 0, 1, -1, true, false, true },
-													{ "F2P", { 255, 255, 255, 255 }, 0, 0, 0, true, false, true }
+								{ "Default", { 200, 200, 200, 255 }, 0, false, false, true },
+								{ "Ignored", { 200, 200, 200, 255 }, -1, false, true, true },
+								{ "Cheater", { 255, 100, 100, 255 }, 1, false, true, true },
+								{ "Friend", { 100, 255, 100, 255 }, 0, true, false, true },
+								{ "Party", { 100, 100, 255, 255 }, 0, true, false, true },
+								{ "F2P", { 255, 255, 255, 255 }, 0, true, false, true }
 							};
 
 							if (auto tSub = tRead.get_child_optional("Config"))
@@ -2456,8 +3239,6 @@ void CMenu::MenuLogs(int iTab)
 									F::Configs.LoadJson(tChild, "Name", tTag.m_sName);
 									F::Configs.LoadJson(tChild, "Color", tTag.m_tColor);
 									F::Configs.LoadJson(tChild, "Priority", tTag.m_iPriority);
-									F::Configs.LoadJson(tChild, "FollowPriority", tTag.m_iFollowPriority);
-									F::Configs.LoadJson(tChild, "VotePriority", tTag.m_iVotePriority);
 									F::Configs.LoadJson(tChild, "Label", tTag.m_bLabel);
 
 									int iID = F::PlayerUtils.TagToIndex(std::stoi(sName));
@@ -2466,8 +3247,6 @@ void CMenu::MenuLogs(int iTab)
 										vTags[iID].m_sName = tTag.m_sName;
 										vTags[iID].m_tColor = tTag.m_tColor;
 										vTags[iID].m_iPriority = tTag.m_iPriority;
-										vTags[iID].m_iFollowPriority = tTag.m_iFollowPriority;
-										vTags[iID].m_iVotePriority = tTag.m_iVotePriority;
 										vTags[iID].m_bLabel = tTag.m_bLabel;
 									}
 									else
@@ -4445,7 +5224,6 @@ void CMenu::Render()
 		AddDraggable("Ping", Vars::Menu::PingDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Ping);
 		AddDraggable("Conditions", Vars::Menu::ConditionsDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::Conditions);
 		AddDraggable("Seed prediction", Vars::Menu::SeedPredictionDisplay, FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::SeedPrediction);
-		AddDraggable("Nav bot", Vars::Menu::NavBotDisplay, m_bIsOpen && (FGet(Vars::Menu::Indicators) & Vars::Menu::IndicatorsEnum::NavBot));
 		AddResizableDraggable("Camera", Vars::Visuals::Simulation::ProjectileWindow, FGet(Vars::Visuals::Simulation::ProjectileCamera), OptionalConstraints);
 
 		F::Render.Cursor = GetMouseCursor();
