@@ -3,7 +3,7 @@
 ## <img src=".github/assets/amalgam_combo.png" alt="Amalgam" height="100">
 
 
-[![Discord](https://img.shields.io/discord/1491846173139407029?style=for-the-badge&color=blue&labelColor=grey&label=Discord&logo=discord)](https://dsc.gg/binleymegachippy)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://dsc.gg/binleymegachippy)
 
 
 [![Download](.github/assets/download.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64Release.zip)
