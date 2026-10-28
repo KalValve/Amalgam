@@ -3,15 +3,21 @@ name: MSBuild
 
 on:
   push:
-    paths-ignore:
-      - 'README.md'
-      - '**/*.md'
-      - '.github/workflows/**'
+    branches:
+      - master
+    paths:
+      - '**'
+      - '!README.md'
+      - '!**/*.md'
+      - '!.github/workflows/**'
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - '**/*.md'
-      - '.github/workflows/**'
+    branches:
+      - master
+    paths:
+      - '**'
+      - '!README.md'
+      - '!**/*.md'
+      - '!.github/workflows/**'
 
 jobs:
   msbuild:
