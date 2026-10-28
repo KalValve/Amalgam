@@ -6,10 +6,12 @@ on:
     paths-ignore:
       - 'README.md'
       - '**/*.md'
+      - '.github/workflows/**'
   pull_request:
     paths-ignore:
       - 'README.md'
       - '**/*.md'
+      - '.github/workflows/**'
 
 jobs:
   msbuild:
