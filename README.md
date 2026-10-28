@@ -25,8 +25,5 @@
 
 ## WARNING: This project is in early development. Expect crashes, UI bugs and other issues. Report issues [here](https://github.com/KalValve/Amalgam/issues).
 
-##
-
-Read about Amalgam's documentation and features [here](../../wiki).
 
 </div>
