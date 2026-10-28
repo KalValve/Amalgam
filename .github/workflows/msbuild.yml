@@ -25,6 +25,8 @@ jobs:
         configuration:
           - Release
           - ReleaseAVX2
+          - ReleaseTextmode
+          - ReleaseTextmodeAVX2
           - ReleaseFreetype
           - ReleaseFreetypeAVX2
         platform:
