@@ -1928,6 +1928,32 @@ namespace ImGui
 		return bReturn;
 	}
 
+	inline bool FInputInt(const char* sLabel, int* pVar, int iMin, int iMax, int iFlags = FDropdownEnum::None)
+	{
+		static std::unordered_map<uint32_t, std::string> mValues = {};
+		const auto uHash = FNV1A::Hash32(sLabel);
+		auto& sValue = mValues[uHash];
+		if (!ActiveMap[uHash])
+			sValue = std::to_string(*pVar);
+
+		const bool bReturn = FSDropdown(sLabel, &sValue, {}, iFlags | FSDropdownEnum::AutoUpdate);
+		if (bReturn && !sValue.empty())
+		{
+			try
+			{
+				size_t iParsed = 0;
+				const int iValue = std::stoi(sValue, &iParsed);
+				if (iParsed == sValue.size())
+					*pVar = std::clamp(iValue, iMin, iMax);
+			}
+			catch (const std::exception&)
+			{
+			}
+		}
+
+		return bReturn;
+	}
+
 	inline bool ColorPicker(const char* sLabel, Color_t* pColor, bool bTooltip = true, ImVec2 vSize = { H::Draw.Scale(12), H::Draw.Scale(12) })
 	{
 		ImVec2 vOriginalPos = GetCursorPos();

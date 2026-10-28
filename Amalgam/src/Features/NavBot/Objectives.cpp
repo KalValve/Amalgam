@@ -1988,7 +1988,7 @@ void CMissionBoard::Update(CTFPlayer* pLocal)
 			sLastStatus = m_sStatus;
 			SDK::Output("NavBotMission", std::format("Mission: {} urgency={:.2f} friends={} enemies={}",
 				std::string(m_sStatus.begin(), m_sStatus.end()), m_flUrgency, m_iFriendliesNear, m_iEnemiesNear).c_str(),
-				{ 120, 220, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				{ 120, 220, 255 }, OUTPUT_DEBUG);
 		}
 	}
 }

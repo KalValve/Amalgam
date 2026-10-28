@@ -1524,9 +1524,9 @@ void CMenu::MenuMisc(int iTab)
 					PopTransparent();
 					PushTransparent(!(Vars::Misc::Automation::AutoItem::Enable.Value & Vars::Misc::Automation::AutoItem::EnableEnum::Hats));
 					{
-						FSlider("Hat 1", &Vars::Misc::Automation::AutoItem::FirstHat.Value, 1, 3000, 1, "%i", FSliderEnum::Left);
-						FSlider("Hat 2", &Vars::Misc::Automation::AutoItem::SecondHat.Value, 1, 3000, 1, "%i", FSliderEnum::Right);
-						FSlider("Hat 3", &Vars::Misc::Automation::AutoItem::ThirdHat.Value, 1, 3000, 1, "%i");
+						FInputInt("Hat 1", &Vars::Misc::Automation::AutoItem::FirstHat.Value, 1, 3000, FDropdownEnum::Left);
+						FInputInt("Hat 2", &Vars::Misc::Automation::AutoItem::SecondHat.Value, 1, 3000, FDropdownEnum::Right);
+						FInputInt("Hat 3", &Vars::Misc::Automation::AutoItem::ThirdHat.Value, 1, 3000);
 					}
 					PopTransparent();
 				} EndSection();

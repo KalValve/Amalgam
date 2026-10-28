@@ -42,7 +42,19 @@ bool CNavBotSupplies::GetSuppliesData(CTFPlayer* pLocal, bool& bClosestTaken, bo
 		m_vTempMain.insert(m_vTempMain.end(), m_vCachedAmmoOrigins.begin(), m_vCachedAmmoOrigins.end());
 	}
 	else
-		m_vTempMain = m_vCachedHealthOrigins;
+	{
+		for (auto pEntity : H::Entities.GetGroup(EntityEnum::PickupHealth))
+		{
+			if (pEntity->IsDormant())
+				continue;
+
+			SupplyData_t tData;
+			tData.m_vOrigin = pEntity->GetAbsOrigin();
+			m_vTempMain.emplace_back(tData);
+		}
+		m_vTempMain.reserve(m_vTempMain.size() + m_vCachedHealthOrigins.size());
+		m_vTempMain.insert(m_vTempMain.end(), m_vCachedHealthOrigins.begin(), m_vCachedHealthOrigins.end());
+	}
 
 	if (m_vTempMain.size())
 	{

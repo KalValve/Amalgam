@@ -373,7 +373,7 @@ bool CNavBotCapture::GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam
 			m_vCurrentCaptureSpot.reset();
 			ReleaseCaptureSpotClaim();
 			if (Vars::Debug::Logging.Value)
-				SDK::Output("NavBotCapture", "Capture.GetControlPointGoal: nearby control point index invalid, searching other points", { 255, 200, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				SDK::Output("NavBotCapture", "Capture.GetControlPointGoal: nearby control point index invalid, searching other points", { 255, 200, 50 }, OUTPUT_DEBUG);
 			return false;
 		}
 
@@ -383,7 +383,7 @@ bool CNavBotCapture::GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam
 			m_vCurrentCaptureSpot.reset();
 			ReleaseCaptureSpotClaim();
 			if (Vars::Debug::Logging.Value)
-				SDK::Output("NavBotCapture", std::format("Capture.GetControlPointGoal: control point {} no longer valid (verified {}), searching other points", iControlPointIdx, tVerify.first).c_str(), { 255, 200, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				SDK::Output("NavBotCapture", std::format("Capture.GetControlPointGoal: control point {} no longer valid (verified {}), searching other points", iControlPointIdx, tVerify.first).c_str(), { 255, 200, 50 }, OUTPUT_DEBUG);
 			return false;
 		}
 
@@ -468,13 +468,13 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 			pLocal && pLocal->m_bHasPasstimeBall() ? 1 : 0,
 			pBall ? pBall->entindex() : -1,
 			int(F::GameObjectiveController.m_eGameMode)).c_str(),
-			{ 120, 200, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			{ 120, 200, 255 }, OUTPUT_DEBUG);
 	}
 
 	if (!pBall)
 	{
 		if (Vars::Debug::Logging.Value)
-			SDK::Output("NavBotCapture", "GetPasstimeGoal: no ball entity from PasstimeController", { 255, 140, 140 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("NavBotCapture", "GetPasstimeGoal: no ball entity from PasstimeController", { 255, 140, 140 }, OUTPUT_DEBUG);
 		return false;
 	}
 
@@ -487,7 +487,7 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 		SDK::Output("NavBotCapture", std::format(
 			"GetPasstimeGoal: carrierIdx={} localCarrier={}",
 			iCarrierIdx, bLocalCarrier ? 1 : 0).c_str(),
-			{ 120, 200, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			{ 120, 200, 255 }, OUTPUT_DEBUG);
 	}
 
 	if (bLocalCarrier)
@@ -514,13 +514,13 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 					std::string(m_sCaptureStatus.begin(), m_sCaptureStatus.end()),
 					tGoal.m_iGoalType,
 					vOut.x, vOut.y, vOut.z).c_str(),
-					{ 120, 255, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+					{ 120, 255, 120 }, OUTPUT_DEBUG);
 			}
 			return true;
 		}
 
 		if (Vars::Debug::Logging.Value)
-			SDK::Output("NavBotCapture", "GetPasstimeGoal: local carrier but no goal info for enemy team", { 255, 140, 140 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("NavBotCapture", "GetPasstimeGoal: local carrier but no goal info for enemy team", { 255, 140, 140 }, OUTPUT_DEBUG);
 		return false;
 	}
 
@@ -543,7 +543,7 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 				m_sCaptureStatus = L"Assist";
 				vOut = vCarrierPos;
 				if (Vars::Debug::Logging.Value)
-					SDK::Output("NavBotCapture", "GetPasstimeGoal: teammate carrier assist fallback, no goal pos", { 255, 210, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+					SDK::Output("NavBotCapture", "GetPasstimeGoal: teammate carrier assist fallback, no goal pos", { 255, 210, 120 }, OUTPUT_DEBUG);
 				return true;
 			}
 
@@ -572,7 +572,7 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 					"GetPasstimeGoal: teammate carrier status={} out=({:.0f},{:.0f},{:.0f})",
 					std::string(m_sCaptureStatus.begin(), m_sCaptureStatus.end()),
 					vOut.x, vOut.y, vOut.z).c_str(),
-					{ 120, 255, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+					{ 120, 255, 120 }, OUTPUT_DEBUG);
 			}
 			return true;
 		}
@@ -599,13 +599,13 @@ bool CNavBotCapture::GetPasstimeGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemy
 			SDK::Output("NavBotCapture", std::format(
 				"GetPasstimeGoal: chasing loose ball at ({:.0f},{:.0f},{:.0f})",
 				vOut.x, vOut.y, vOut.z).c_str(),
-				{ 120, 255, 120 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				{ 120, 255, 120 }, OUTPUT_DEBUG);
 		}
 		return true;
 	}
 
 	if (Vars::Debug::Logging.Value)
-		SDK::Output("NavBotCapture", "GetPasstimeGoal: failed to resolve any passtime objective", { 255, 140, 140 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+		SDK::Output("NavBotCapture", "GetPasstimeGoal: failed to resolve any passtime objective", { 255, 140, 140 }, OUTPUT_DEBUG);
 	return false;
 }
 
@@ -654,7 +654,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (!(Vars::Misc::Movement::NavBot::Preferences.Value & Vars::Misc::Movement::NavBot::PreferencesEnum::CaptureObjectives))
 	{
 		if (Vars::Debug::Logging.Value)
-			SDK::Output("NavBotCapture", "Capture.Run: CaptureObjectives preference disabled", { 255, 200, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("NavBotCapture", "Capture.Run: CaptureObjectives preference disabled", { 255, 200, 50 }, OUTPUT_DEBUG);
 		return false;
 	}
 
@@ -666,7 +666,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		{
 			if (Vars::Debug::Logging.Value)
 				SDK::Output("NavBotCapture", std::format("Capture.Run: game rules prevented capture (roundState={}, waiting={}, teamwin={}, specialDelivery={})",
-					pGameRules->m_iRoundState(), pGameRules->m_bInWaitingForPlayers(), pGameRules->m_iRoundState() == GR_STATE_TEAM_WIN, pGameRules->m_bPlayingSpecialDeliveryMode()).c_str(), { 255, 200, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+					pGameRules->m_iRoundState(), pGameRules->m_bInWaitingForPlayers(), pGameRules->m_iRoundState() == GR_STATE_TEAM_WIN, pGameRules->m_bPlayingSpecialDeliveryMode()).c_str(), { 255, 200, 50 }, OUTPUT_DEBUG);
 			return false;
 		}
 	}
@@ -712,7 +712,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (m_bOverwriteCapture)
 	{
 		if (Vars::Debug::Logging.Value)
-			SDK::Output("NavBotCapture", "Capture.Run: overwritten capture (player is on objective or close enough)", { 150, 255, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+			SDK::Output("NavBotCapture", "Capture.Run: overwritten capture (player is on objective or close enough)", { 150, 255, 150 }, OUTPUT_DEBUG);
 
 		auto DoLook = [&](const Vec3& vTarget, bool bTargetValid) -> void
 			{
@@ -782,7 +782,7 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 				m_bWalkTo ? 1 : 0,
 				vTarget.x, vTarget.y, vTarget.z,
 				int(F::NavEngine.m_eCurrentPriority)).c_str(),
-				{ 180, 220, 255 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				{ 180, 220, 255 }, OUTPUT_DEBUG);
 		}
 	}
 
@@ -806,14 +806,14 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		if (bNavOk)
 		{
 			if (Vars::Debug::Logging.Value)
-				SDK::Output("NavBotCapture", "Capture.Run: NavTo succeeded, started capture path", { 150, 255, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				SDK::Output("NavBotCapture", "Capture.Run: NavTo succeeded, started capture path", { 150, 255, 150 }, OUTPUT_DEBUG);
 			vPreviousTarget = vTarget;
 			return true;
 		}
 		else
 		{
 			if (Vars::Debug::Logging.Value)
-				SDK::Output("NavBotCapture", "Capture.Run: NavTo failed for capture target", { 255, 100, 100 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+				SDK::Output("NavBotCapture", "Capture.Run: NavTo failed for capture target", { 255, 100, 100 }, OUTPUT_DEBUG);
 			tCaptureTimer.Update();
 		}
 	}

@@ -660,7 +660,6 @@ void CNavEngine::Reset(bool bForced)
 			if (m_pPathWorker && m_pMap->m_eState == NavStateEnum::Active)
 			{
 				m_pPathWorker->Start(m_pMap.get());
-				SDK::Output("NavEngine", std::format("Loaded {} ({} nav areas)", sNavPath, m_pMap->m_navfile.m_vAreas.size()).c_str(), { 50, 255, 50 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
 			}
 			else
 				SDK::Output("NavEngine", std::format("Could not load nav mesh: {}", sNavPath).c_str(), { 255, 100, 70 }, OUTPUT_CONSOLE | OUTPUT_DEBUG | OUTPUT_TOAST | OUTPUT_MENU);
