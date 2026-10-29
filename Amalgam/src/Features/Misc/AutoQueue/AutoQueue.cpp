@@ -12,6 +12,9 @@ void CAutoQueue::Run()
 
 	const bool bInGame = I::EngineClient->IsInGame();
 	const bool bIsLoadingMap = I::EngineClient->IsDrawingLoadingImage();
+	const bool bIsConnected = I::EngineClient->IsConnected();
+	const bool bHasNetChannel = I::ClientState && I::ClientState->m_NetChannel;
+	const bool bStillAttachedToServer = bInGame || bIsConnected || bHasNetChannel;
 	const float flCurrentTime = I::GlobalVars->realtime;
 
 	if (!Vars::Misc::Queueing::AutoCasualQueue.Value)
@@ -102,7 +105,8 @@ void CAutoQueue::Run()
 		return;
 	}
 
-	if (Vars::Misc::Queueing::AutoCasualQueue.Value && !I::TFPartyClient->BInQueueForMatchGroup(k_eTFMatchGroup_Casual_Default))
+	if (Vars::Misc::Queueing::AutoCasualQueue.Value && !bIsQueued &&
+		(!bIsLoadingMap || !Vars::Misc::Queueing::RQLTM.Value) && !bStillAttachedToServer)
 	{
 		if (!I::TFPartyClient->AnySelected())
 			I::TFPartyClient->LoadSavedCasualCriteria();
