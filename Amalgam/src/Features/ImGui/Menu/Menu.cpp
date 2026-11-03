@@ -1,4 +1,8 @@
 #include "Menu.h"
+#ifdef TEXTMODE
+void CMenu::Render() {}
+void CMenu::AddOutput(const char*, const char*, Color_t) {}
+#else
 
 #include "Components.h"
 #include "../Notifications/Notifications.h"
@@ -4482,3 +4486,4 @@ void CMenu::AddOutput(const char* sFunction, const char* sLog, Color_t tColor)
 	while (m_vOutput.size() > m_iMaxOutputSize)
 		m_vOutput.pop_front();
 }
+#endif // TEXTMODE

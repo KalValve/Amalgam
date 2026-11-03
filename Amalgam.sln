@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.8.34525.116
+# Visual Studio Version 18
+VisualStudioVersion = 18.11.12315.225 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Amalgam", "Amalgam\Amalgam.vcxproj", "{2550C133-72A8-4AF7-B22A-A8012BD9F376}"
 EndProject
@@ -18,13 +18,15 @@ Global
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 		ReleaseAVX2|x64 = ReleaseAVX2|x64
-		ReleaseTextmode|x64 = ReleaseTextmode|x64
-		ReleaseTextmodeAVX2|x64 = ReleaseTextmodeAVX2|x64
 		ReleaseAVX2|x86 = ReleaseAVX2|x86
 		ReleaseFreetype|x64 = ReleaseFreetype|x64
 		ReleaseFreetype|x86 = ReleaseFreetype|x86
 		ReleaseFreetypeAVX2|x64 = ReleaseFreetypeAVX2|x64
 		ReleaseFreetypeAVX2|x86 = ReleaseFreetypeAVX2|x86
+		ReleaseTextmode|x64 = ReleaseTextmode|x64
+		ReleaseTextmode|x86 = ReleaseTextmode|x86
+		ReleaseTextmodeAVX2|x64 = ReleaseTextmodeAVX2|x64
+		ReleaseTextmodeAVX2|x86 = ReleaseTextmodeAVX2|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Debug|x64.ActiveCfg = Debug|x64
@@ -48,10 +50,6 @@ Global
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Release|x86.ActiveCfg = Release|Win32
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.Release|x86.Build.0 = Release|Win32
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseAVX2|x64.ActiveCfg = ReleaseAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.ActiveCfg = ReleaseTextmode|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.Build.0 = ReleaseTextmode|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x64.ActiveCfg = ReleaseTextmodeAVX2|x64
-		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x64.Build.0 = ReleaseTextmodeAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseAVX2|x64.Build.0 = ReleaseAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseAVX2|x86.ActiveCfg = ReleaseAVX2|Win32
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseAVX2|x86.Build.0 = ReleaseAVX2|Win32
@@ -63,6 +61,14 @@ Global
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetypeAVX2|x64.Build.0 = ReleaseFreetypeAVX2|x64
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetypeAVX2|x86.ActiveCfg = ReleaseFreetypeAVX2|Win32
 		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseFreetypeAVX2|x86.Build.0 = ReleaseFreetypeAVX2|Win32
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.ActiveCfg = ReleaseTextmode|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x64.Build.0 = ReleaseTextmode|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x86.ActiveCfg = ReleaseTextmode|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmode|x86.Build.0 = ReleaseTextmode|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x64.ActiveCfg = ReleaseTextmodeAVX2|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x64.Build.0 = ReleaseTextmodeAVX2|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x86.ActiveCfg = ReleaseTextmodeAVX2|x64
+		{2550C133-72A8-4AF7-B22A-A8012BD9F376}.ReleaseTextmodeAVX2|x86.Build.0 = ReleaseTextmodeAVX2|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

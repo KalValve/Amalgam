@@ -1,5 +1,5 @@
 #include "Direct3DDevice9.h"
-
+#ifndef TEXTMODE
 #include "../SDK/SDK.h"
 #include "../Features/ImGui/Render.h"
 #include "../Features/ImGui/Menu/Menu.h"
@@ -93,3 +93,4 @@ void WndProc::Unload()
 {
 	SetWindowLongPtr(hwWindow, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(Original));
 }
+#endif // TEXTMODE
