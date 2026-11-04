@@ -116,8 +116,10 @@ void CCore::Load()
 		return;
 	if (m_bUnload = m_bFailed2 = !U::Hooks.Initialize() || !U::BytePatches.Initialize() || !H::Events.Initialize())
 		return;
+#ifndef TEXTMODE
 	F::Materials.LoadMaterials();
 	H::Fonts.Reload();
+#endif
 	F::Configs.LoadConfig(F::Configs.m_sCurrentConfig, false);
 
 	SDK::Output("Amalgam", "Loaded", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
@@ -152,8 +154,10 @@ void CCore::Unload()
 	U::BytePatches.Unload();
 	H::Events.Unload();
 
+#ifndef TEXTMODE
 	if (F::Menu.m_bIsOpen)
 		I::MatSystemSurface->SetCursorAlwaysVisible(false);
+#endif
 	H::ConVars.FindVar("cl_wpn_sway_interp")->SetValue(0.f);
 	H::ConVars.FindVar("cl_wpn_sway_scale")->SetValue(0.f);
 	F::Visuals.RestoreWorldModulation();
@@ -174,7 +178,9 @@ void CCore::Unload()
 	Sleep(250);
 	F::EnginePrediction.Unload();
 	H::ConVars.Restore();
+#ifndef TEXTMODE
 	F::Materials.UnloadMaterials();
+#endif
 
 	if (m_bFailed2)
 	{

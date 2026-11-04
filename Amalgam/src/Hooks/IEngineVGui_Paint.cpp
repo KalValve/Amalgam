@@ -33,6 +33,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		F::NamedPipe.Run(H::Entities.GetLocal());
 #endif
 	}
+#ifndef TEXTMODE
 	else if (iMode & PAINT_INGAMEPANELS && !SDK::CleanScreenshot())
 	{
 		H::Draw.UpdateScreenSize();
@@ -65,6 +66,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		}
 		H::Draw.End();
 	}
+#endif
 
 	CALL_ORIGINAL(rcx, iMode);
 

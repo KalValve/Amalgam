@@ -1,4 +1,12 @@
 #include "Render.h"
+#ifdef TEXTMODE
+void CRender::Render(IDirect3DDevice9*) {}
+void CRender::Initialize(IDirect3DDevice9*) {}
+void CRender::Reload() {}
+void CRender::LoadColors() {}
+void CRender::LoadFonts() {}
+void CRender::LoadStyle() {}
+#else
 
 #include "../../Hooks/Direct3DDevice9.h"
 #include <ImGui/imgui_impl_win32.h>
@@ -158,3 +166,4 @@ void CRender::Reload()
 
 	m_bLoaded = true;
 }
+#endif // TEXTMODE

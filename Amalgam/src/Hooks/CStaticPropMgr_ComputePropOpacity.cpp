@@ -1,5 +1,6 @@
 #include "../SDK/SDK.h"
 
+#ifndef TEXTMODE
 MAKE_SIGNATURE(CStaticPropMgr_ComputePropOpacity, "engine.dll", "48 89 5C 24 ? 48 89 7C 24 ? 41 54 41 56 41 57 48 83 EC ? 48 8B 05", 0x0);
 
 MAKE_HOOK(CStaticPropMgr_ComputePropOpacity, S::CStaticPropMgr_ComputePropOpacity(), void,
@@ -15,3 +16,4 @@ MAKE_HOOK(CStaticPropMgr_ComputePropOpacity, S::CStaticPropMgr_ComputePropOpacit
 
 	CALL_ORIGINAL(rcx, pProp);
 }
+#endif

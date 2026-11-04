@@ -14,7 +14,9 @@ bool CHooks::Initialize()
 {
 	MH_Initialize();
 
+#ifndef TEXTMODE
 	WndProc::Initialize();
+#endif
 	for (auto& pHook : m_mHooks | std::views::values)
 		reinterpret_cast<void(__cdecl*)()>(pHook->m_pInitFunc)();
 
@@ -29,6 +31,8 @@ bool CHooks::Unload()
 	m_bFailed = MH_Uninitialize() != MH_OK;
 	if (m_bFailed)
 		U::Core.AppendFailText("MinHook failed to unload all hooks!");
+#ifndef TEXTMODE
 	WndProc::Unload();
+#endif
 	return !m_bFailed;
 }
