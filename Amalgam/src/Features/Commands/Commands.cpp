@@ -203,7 +203,8 @@ static std::unordered_map<uint32_t, CommandCallback> s_mExtraCommands = {
 		else
 			SDK::Output("cat_save_nav_mesh", "No nav mesh is loaded");
 	})
-	AddCommand("cat_ignore",
+	
+AddCommand("cat_ignore",
 	{
 		if (vArgs.size() < 2)
 		{
@@ -224,17 +225,19 @@ static std::unordered_map<uint32_t, CommandCallback> s_mExtraCommands = {
 			SDK::Output("Invalid ID32 format");
 			return;
 		}
+
 		if (!uAccountID)
 		{
 			SDK::Output("Invalid ID32");
 			return;
 		}
 
-		std::string sTag = vArgs[1];
-		std::transform(sTag.begin(), sTag.end(), sTag.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		const std::string sTag = vArgs[1];
+
 		const int iTagID = sTag == "rage"
 			? F::PlayerUtils.TagToIndex(CHEATER_TAG)
 			: F::PlayerUtils.GetTag(sTag);
+
 		if (iTagID == -1)
 		{
 			SDK::Output(std::format("Invalid tag: {}", sTag).c_str());
@@ -247,6 +250,7 @@ static std::unordered_map<uint32_t, CommandCallback> s_mExtraCommands = {
 			SDK::Output(std::format("Tag {} is not assignable", sTag).c_str());
 			return;
 		}
+
 		if (F::PlayerUtils.HasTag(uAccountID, iTagID))
 		{
 			SDK::Output(std::format("ID32 {} already has tag {}", uAccountID, pTag->m_sName).c_str());
@@ -256,6 +260,7 @@ static std::unordered_map<uint32_t, CommandCallback> s_mExtraCommands = {
 		F::PlayerUtils.AddTag(uAccountID, iTagID, true);
 		SDK::Output(std::format("Added tag {} to ID32 {}", pTag->m_sName, uAccountID).c_str());
 	})
+
 	AddCommand("cat_rent_item",
 	{
 		if (vArgs.size() != 1)
