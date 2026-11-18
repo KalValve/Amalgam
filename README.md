@@ -4,22 +4,22 @@
 
 
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://dsc.gg/binleymegachippy)
-[![Workflow status](https://img.shields.io/github/actions/workflow/status/KalValve/Amalgam/msbuild.yml?branch=master&style=for-the-badge)](/../../actions)
+[![Workflow status](https://img.shields.io/github/actions/workflow/status/KalValve/Amalgam/msbuild.yml?branch=beta&style=for-the-badge)](/../../actions)
 
 
-[![Download](.github/assets/download.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64Release.zip)
-[![PDB](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleasePDB.zip)
-[![Download AVX2](.github/assets/download_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseAVX2.zip)
-[![PDB AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseAVX2PDB.zip)
-[![Textmode](.github/assets/textmode.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseTextmode.zip)
-[![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseTextmodePDB.zip)
-[![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2.zip)
-[![PDB Textmode AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseTextmodeAVX2PDB.zip)
+[![Download](.github/assets/download.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64Release.zip)
+[![PDB](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleasePDB.zip)
+[![Download AVX2](.github/assets/download_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseAVX2.zip)
+[![PDB AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseAVX2PDB.zip)
+[![Textmode](.github/assets/textmode.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseTextmode.zip)
+[![PDB Textmode](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseTextmodePDB.zip)
+[![Textmode AVX2](.github/assets/textmode_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseTextmodeAVX2.zip)
+[![PDB Textmode AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseTextmodeAVX2PDB.zip)
 <br>
-[![Freetype](.github/assets/freetype.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseFreetype.zip)
-[![PDB Freetype](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseFreetypePDB.zip)
-[![Freetype AVX2](.github/assets/freetype_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2.zip)
-[![PDB Freetype AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/master/Amalgamx64ReleaseFreetypeAVX2PDB.zip)
+[![Freetype](.github/assets/freetype.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseFreetype.zip)
+[![PDB Freetype](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseFreetypePDB.zip)
+[![Freetype AVX2](.github/assets/freetype_avx2.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseFreetypeAVX2.zip)
+[![PDB Freetype AVX2](.github/assets/pdb.svg)](https://nightly.link/KalValve/Amalgam/workflows/msbuild/beta/Amalgamx64ReleaseFreetypeAVX2PDB.zip)
 
 <sub>Ports Unibox features to base Amalgam while minimizing issues that pertain to the original Unibox fork.</sub>
 
